@@ -1,0 +1,89 @@
+/* Styling for the app-chat host element itself */
+:host {
+  display: flex; /* Use flexbox to structure the chat component */
+  flex-direction: column; /* Stack children (messages, input) vertically */
+  height: calc(100vh - 40px); /* Example: full viewport height minus some padding */
+  max-width: 600px;
+  margin: 20px auto; /* Center the chat component on the page */
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  font-family: Arial, sans-serif;
+  overflow: hidden; /* Prevents content from spilling out, ensures border-radius is respected */
+}
+
+/* Styles for the container holding the messages (message-area) */
+.chat-messages-container {
+  flex-grow: 1; /* Allows this area to take up available vertical space */
+  overflow-y: auto; /* Enables scrolling for messages */
+  padding: 15px;
+  /* border-bottom: 1px solid #eee; No border needed if input area has border-top */
+  background-color: #f9f9f9;
+}
+
+/* Individual message styling */
+.message {
+  color: #333;
+  padding: 10px 15px;
+  margin-bottom: 10px;
+  border-radius: 15px;
+  max-width: 80%; /* Messages don't span the entire width */
+  word-wrap: break-word; /* Ensures long words don't overflow */
+}
+
+/* Differentiate user messages - assuming "You:" prefix for user's own messages */
+/* This is a simple heuristic. For a robust solution, messages should have a sender property. */
+.message:is(:has(strong):contains("You:"), :contains("You:")) { /* If message starts with "You:" or has strong tag with You: */
+  background-color: #dcf8c6; /* Light green for user messages, typical in chat apps */
+  border: 1px solid #c8e6c9;
+  margin-left: auto; /* Align "user" messages to the right */
+  margin-right: 0;
+}
+
+.message:not(:is(:has(strong):contains("You:"), :contains("You:"))) { /* Messages not from "You:" */
+  background-color: #e8eaf6; /* Light purple/blue for other messages */
+  border: 1px solid #c5cae9;
+  margin-right: auto; /* Align "other" messages to the left */
+  margin-left: 0;
+}
+
+
+/* Container for the input field and send button (input-area) */
+.chat-input-container {
+  display: flex; /* Aligns input and button in a row */
+  padding: 15px;
+  background-color: #fff;
+  border-top: 1px solid #ddd; /* Separates input area from messages */
+}
+
+/* Text input field styling */
+.chat-input-container input[type="text"] {
+  flex-grow: 1; /* Input field takes most of the space */
+  padding: 10px 15px;
+  border: 1px solid #ccc;
+  border-radius: 20px; /* Rounded corners for the input field */
+  margin-right: 10px;
+  font-size: 1rem;
+}
+
+.chat-input-container input[type="text"]:focus {
+  outline: none;
+  border-color: #007bff; /* Highlight focus with a blue border */
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Send button styling */
+.chat-input-container button {
+  padding: 10px 20px;
+  background-color: #007bff; /* Blue background for the button */
+  color: white;
+  border: none;
+  border-radius: 20px; /* Rounded corners for the button */
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s ease;
+}
+
+.chat-input-container button:hover {
+  background-color: #0056b3; /* Darker blue on hover */
+}

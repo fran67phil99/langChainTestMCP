@@ -137,6 +137,27 @@ ws.onmessage = function(event) {
 - "Spiegami cos'è l'intelligenza artificiale"
 ```
 
+## 🚀 Frontend Angular
+
+Per avviare l'interfaccia utente Angular di testing:
+
+1.  **Naviga nella directory del frontend:**
+    ```bash
+    cd langgraph-frontend
+    ```
+
+2.  **Installa le dipendenze:**
+    ```bash
+    npm install
+    ```
+
+3.  **Avvia il server di sviluppo Angular:**
+    ```bash
+    ng serve
+    ```
+
+4.  Apri il browser e naviga a `http://localhost:4200/`. L'applicazione si connetterà automaticamente al backend WebSocket su `ws://localhost:8000/ws/angular-session`.
+
 ## 🧪 Testing
 
 ### Test Locale degli Agenti
@@ -244,7 +265,7 @@ Se hai configurato LangSmith, puoi monitorare l'esecuzione degli agenti:
 - [ ] Aggiungere autenticazione e autorizzazione
 - [ ] Implementare rate limiting
 - [ ] Aggiungere metriche e monitoring
-- [ ] Creare frontend web per testing
+- [x] Creare frontend web per testing
 - [ ] Documentazione API con OpenAPI/Swagger
 
 ## 📄 Licenza
