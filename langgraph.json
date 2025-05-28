@@ -1,0 +1,19 @@
+{
+  "graphs": {
+    "general_agent": {
+      "path": "./my_agent/general_agent.py:graph",
+      "description": "Agente LangGraph per risposte generali e ragionamento"
+    },
+    "orchestrator": {
+      "path": "./my_agent/orchestrator_agent.py:orchestrator_graph",
+      "description": "Agente orchestratore che dirige le richieste agli agenti specializzati"
+    }
+  },  "dependencies": [
+    "langgraph>=0.0.60",
+    "langchain-core>=0.1.0",
+    "langchain>=0.1.0",
+    "python-dotenv>=1.0.0",
+    "langchain-openai>=0.0.5"
+  ],
+  "env": ".env"
+}

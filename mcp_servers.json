@@ -1,0 +1,10 @@
+{
+  "servers": [
+    {
+      "id": "mauden_server",
+      "name": "Mauden MCP Server",
+      "url": "http://localhost:8080/sse",
+      "description": "Server MCP principale per tools Mauden"
+    }
+  ]
+}
