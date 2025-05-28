@@ -1,10 +1,78 @@
-<div class="chat-messages-container">
-  <div *ngFor="let message of messages" class="message">
-    {{ message }}
+<div class="chat-container">
+  <!-- Header della Chat -->
+  <div class="chat-header">
+    <div class="agent-avatar">AI</div>
+    <div class="agent-info">
+      <h3>Assistente AI</h3>
+      <p>{{ isConnected ? 'Online' : 'Disconnesso' }}</p>
+    </div>
+    <div class="connection-status">
+      <div class="status-indicator" *ngIf="isConnected"></div>
+      <span *ngIf="isConnected">Connesso</span>
+    </div>
   </div>
-</div>
 
-<div class="chat-input-container">
-  <input type="text" [(ngModel)]="newMessage" placeholder="Type your message...">
-  <button (click)="sendMessage()">Send</button>
+  <!-- Area Messaggi -->
+  <div class="messages-area" #messagesContainer>    <!-- Messaggi -->
+    <div *ngFor="let message of messages" 
+         class="message-bubble"
+         [class.user]="message.isUser"
+         [class.agent]="!message.isUser">
+      
+      <div class="message-avatar">
+        {{ message.isUser ? 'U' : 'AI' }}
+      </div>
+      
+      <div class="message-content">
+        <!-- Contenuto per messaggi utente (solo testo) -->
+        <div *ngIf="message.isUser" class="message-text">
+          {{ message.content }}
+        </div>
+        
+        <!-- Contenuto per messaggi agente (con markdown) -->
+        <div *ngIf="!message.isUser" 
+             class="message-text" 
+             [innerHTML]="message.htmlContent">
+        </div>
+        
+        <div class="message-timestamp">
+          {{ formatTime(message.timestamp) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Indicatore di digitazione -->
+    <div *ngIf="isTyping" class="typing-indicator">
+      <div class="message-avatar">AI</div>
+      <div class="typing-bubble">
+        <div class="typing-dots">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Area di Input -->
+  <div class="input-area">
+    <div class="input-container">
+      <div class="input-wrapper">
+        <textarea 
+          [(ngModel)]="newMessage" 
+          (keydown)="onKeyPress($event)"
+          placeholder="Messaggio..."
+          class="message-input"
+          rows="1"
+          [disabled]="!isConnected">
+        </textarea>
+        <button 
+          (click)="sendMessage()" 
+          class="send-button"
+          [disabled]="!isConnected || newMessage.trim() === ''">
+          ↑
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
