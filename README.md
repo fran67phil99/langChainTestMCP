@@ -100,7 +100,7 @@ docker build -t langgraph-mcp .
 
 2. **Avvia il container**
 ```bash
-docker run -p 8000:8000 --env-file .env langgraph-mcp
+docker run -p 8001:8001 --env-file .env langgraph-mcp
 ```
 
 ## 🎯 Utilizzo
@@ -110,7 +110,7 @@ docker run -p 8000:8000 --env-file .env langgraph-mcp
 Connettiti all'endpoint WebSocket per interagire con gli agenti:
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/my-session-id');
+const ws = new WebSocket('ws://localhost:8001/ws/my-session-id');
 
 ws.onopen = function() {
     ws.send('Chi sono gli stagisti di Mauden?');
@@ -156,7 +156,7 @@ Per avviare l'interfaccia utente Angular di testing:
     ng serve
     ```
 
-4.  Apri il browser e naviga a `http://localhost:4200/`. L'applicazione si connetterà automaticamente al backend WebSocket su `ws://localhost:8000/ws/angular-session`.
+4.  Apri il browser e naviga a `http://localhost:4200/`. L'applicazione si connetterà automaticamente al backend WebSocket su `ws://localhost:8001/ws/angular-session`.
 
 ## 🧪 Testing
 
@@ -179,7 +179,7 @@ python mcp_agent.py
 python main_api.py
 
 # In un altro terminale, testa con curl
-curl -X GET "http://localhost:8000/health"
+curl -X GET "http://localhost:8001/health"
 ```
 
 ## 📁 Struttura del Progetto

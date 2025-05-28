@@ -4,16 +4,16 @@ import { WebsocketService } from '../websocket.service';
 @Component({
   selector: 'app-chat',
   templateUrl: './chat.component.html',
-  styleUrls: ['./chat.component.css']
+  styleUrls: ['./chat.component.css'],
+  standalone: false
 })
 export class ChatComponent implements OnInit {
   messages: string[] = [];
   newMessage: string = '';
 
   constructor(private websocketService: WebsocketService) { }
-
   ngOnInit(): void {
-    this.websocketService.connect('ws://localhost:8000/ws/angular-session');
+    this.websocketService.connect('ws://localhost:8001/ws/angular-session');
     this.websocketService.getMessages().subscribe((message: string) => {
       this.messages.push(message);
     });

@@ -21,9 +21,9 @@ COPY . .
 # COPY config/mcp_servers.json ./config/
 
 # Esponi la porta su cui l'applicazione FastAPI è in esecuzione
-EXPOSE 8000
+EXPOSE 8001
 
 # Definisci il comando per eseguire l'applicazione quando il container si avvia
 # Assicurati che main_api.py sia eseguibile e che Uvicorn sia configurato per ascoltare su 0.0.0.0
 # Questo permette connessioni dall'esterno del container.
-CMD ["uvicorn", "main_api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main_api:app", "--host", "0.0.0.0", "--port", "8001"]
