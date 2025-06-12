@@ -71,6 +71,15 @@ Se i dati sono vuoti o non sembrano utili, informa l'utente in modo appropriato,
 Rispondi sempre in italiano.`
 );
 
+// New template for translation
+const translationSystemPromptTemplate = (targetLanguage: string, originalQuery?: string) => new SystemMessage(
+  `Sei un traduttore esperto. Traduci il testo fornito dall'utente nella seguente lingua: ${targetLanguage}.
+Se la query originale dell'utente fornisce un contesto aggiuntivo, tienilo in considerazione per migliorare la traduzione.
+Query originale (per contesto, se fornita): "${originalQuery || 'Non fornita'}"
+Traduci solo il testo principale fornito dall'utente per la traduzione. Non aggiungere commenti o frasi tue al di fuori del testo tradotto.`
+  // Il testo effettivo da tradurre sarà nel messaggio Human dell'utente.
+);
+
 
 // --- Agent Nodes ---
 
@@ -92,6 +101,16 @@ async function analyzeIntentNode(
                 currentStep: 'intent_analyzed',
                 userIntent: 'summarize_mcp_data',
                 requiresReasoning: true, // Summarization can be complex
+                error: undefined,
+            };
+        }
+        // Check for translation request
+        if (parsedInput && parsedInput.action === 'translate_text') {
+            console.log('💡 Intenzione rilevata: translate_text');
+            return {
+                currentStep: 'intent_analyzed',
+                userIntent: 'translate_text',
+                requiresReasoning: false, // Translation is a direct instruction
                 error: undefined,
             };
         }
@@ -159,32 +178,52 @@ async function responseNode(
     const lastMessageContent = messages[messages.length - 1]?.content?.toString();
     if (lastMessageContent) {
         try {
-            const mcpRequest = JSON.parse(lastMessageContent);
-            if (mcpRequest.action === 'summarize_mcp_data') {
+            const parsedInput = JSON.parse(lastMessageContent);
+            if (userIntent === 'summarize_mcp_data' && parsedInput.action === 'summarize_mcp_data') {
                 console.log("✍️ General Agent: Preparing MCP summarization prompt.");
                 systemPromptToUse = mcpSummarizationSystemPromptTemplate(
-                    mcpRequest.original_query,
-                    mcpRequest.mcp_data
+                    parsedInput.original_query,
+                    parsedInput.mcp_data
                 );
-                // For summarization, we might not want to send the whole history,
-                // just the system prompt. Or, send history *before* the JSON request.
-                // For now, let's clear previous messages for this specific task and only use the system prompt.
-                // This matches the Python version's implicit behavior where only the system prompt with data is used.
-                currentMessages.splice(0, currentMessages.length, systemPromptToUse);
+                // For summarization, use only the specific system prompt and the original JSON as the human message.
+                currentMessages.splice(0, currentMessages.length, systemPromptToUse, new HumanMessage(lastMessageContent));
+
+            } else if (userIntent === 'translate_text' && parsedInput.action === 'translate_text') {
+                console.log("✍️ General Agent: Preparing translation prompt.");
+                const { text_to_translate, target_language, original_query: originalQueryContext } = parsedInput;
+
+                if (!text_to_translate || !target_language) {
+                    console.error("❌ General Agent: Missing 'text_to_translate' or 'target_language' for translation.");
+                    return { currentStep: "error", error: "Dati insufficienti per la traduzione."};
+                }
+                systemPromptToUse = translationSystemPromptTemplate(target_language, originalQueryContext);
+                // For translation, use the specific system prompt and a human message containing only the text to translate.
+                currentMessages.splice(0, currentMessages.length, systemPromptToUse, new HumanMessage(text_to_translate));
             }
+            // If it's not a special JSON action, it will proceed to the 'else' block below.
         } catch (e) {
-            console.error("Error parsing MCP summarization request in responseNode:", e);
-            return { currentStep: "error", error: "Failed to parse MCP summarization request." };
+            // Not a JSON, or JSON parsing failed. Proceed with standard flow if not a special intent.
+            // If it *was* a special intent, this means the JSON was malformed.
+            if (userIntent === 'summarize_mcp_data' || userIntent === 'translate_text') {
+                 console.error(`Error parsing JSON for special intent '${userIntent}':`, e);
+                 return { currentStep: "error", error: `Richiesta ${userIntent} malformata.` };
+            }
+            // Otherwise, it's fine, just a regular message that happens not to be JSON.
         }
     }
-  } else {
-     // Standard flow: Add appropriate system prompt if not already there or different
+  } // This closes the 'if (lastMessageContent)' block
+
+  // Standard flow (if not a special task that replaced currentMessages)
+  // or if lastMessageContent was empty
+  if (userIntent !== 'summarize_mcp_data' && userIntent !== 'translate_text') {
     if (!(currentMessages[0] instanceof SystemMessage) || currentMessages[0].content !== systemPromptToUse.content) {
         currentMessages.unshift(systemPromptToUse);
     }
   }
 
+
   try {
+    console.log("📮 General Agent: Messages sent to LLM:", JSON.stringify(currentMessages.map(m => ({type: m._getType(), content: m.content})), null, 2));
     const response = await llm.invoke(currentMessages);
     const aiMessage = new AIMessage({ content: response.content.toString() });
 
@@ -270,7 +309,27 @@ async function testGeneralAgent() {
       id: 'mcp_summary'
     },
     { messages: [new HumanMessage(JSON.stringify({ action: "summarize_mcp_data", original_query: "Qual è il summary del modello 'alpha'?", mcp_data: { model_name: "alpha", accuracy: "0.95", type: "classification" } }))], id: 'mcp_summary_object'},
-
+    // New test cases for translation
+    {
+      messages: [new HumanMessage(JSON.stringify({ action: "translate_text", text_to_translate: "Hello world", target_language: "Spanish", original_query: "translate this" }))],
+      id: 'translation_english_to_spanish'
+    },
+    {
+      messages: [new HumanMessage(JSON.stringify({ action: "translate_text", text_to_translate: "Wie geht es Ihnen?", target_language: "English", original_query: "what does this mean" }))],
+      id: 'translation_german_to_english'
+    },
+    {
+      messages: [new HumanMessage(JSON.stringify({ action: "translate_text", text_to_translate: "Ciao mondo", target_language: "French", original_query: "translate this for me" }))],
+      id: 'translation_italian_to_french'
+    },
+     { // Test for missing text_to_translate
+      messages: [new HumanMessage(JSON.stringify({ action: "translate_text", target_language: "German", original_query: "translate this" }))],
+      id: 'translation_missing_text'
+    },
+    { // Test for already translated text (or same language)
+      messages: [new HumanMessage(JSON.stringify({ action: "translate_text", text_to_translate: "Bonjour", target_language: "French", original_query: "translate this" }))],
+      id: 'translation_same_language'
+    }
   ];
 
   for (const test of testQueries) {

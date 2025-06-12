@@ -47,6 +47,15 @@ export interface MCPAgentState {
   finalResult?: string;    // Formatted string result for the orchestrator
   error?: string;
   currentMcpStep: string;
+  // New fields for refactored mcpAgent.ts
+  userQuery: string; // Changed from taskDetails, becomes the primary input
+  mcpToolsRegistry?: McpDynamicTool[];
+  selectedToolDetails?: {
+    toolToInvoke: McpDynamicTool;
+    toolParams: Record<string, any>;
+  };
+  invokeGeneralAgentForSummarization?: boolean;
+  invokeGeneralAgentDirectly?: boolean;
 }
 
 // import { BaseMessage } from "@langchain/core/messages"; // Already imported for GeneralAgentState
