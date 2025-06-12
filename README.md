@@ -100,7 +100,7 @@ docker build -t langgraph-mcp .
 
 2. **Avvia il container**
 ```bash
-docker run -p 8000:8000 --env-file .env langgraph-mcp
+docker run -p 8001:8001 --env-file .env langgraph-mcp
 ```
 
 ## 🎯 Utilizzo
@@ -110,7 +110,7 @@ docker run -p 8000:8000 --env-file .env langgraph-mcp
 Connettiti all'endpoint WebSocket per interagire con gli agenti:
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/my-session-id');
+const ws = new WebSocket('ws://localhost:8001/ws/my-session-id');
 
 ws.onopen = function() {
     ws.send('Chi sono gli stagisti di Mauden?');
@@ -137,6 +137,27 @@ ws.onmessage = function(event) {
 - "Spiegami cos'è l'intelligenza artificiale"
 ```
 
+## 🚀 Frontend Angular
+
+Per avviare l'interfaccia utente Angular di testing:
+
+1.  **Naviga nella directory del frontend:**
+    ```bash
+    cd langgraph-frontend
+    ```
+
+2.  **Installa le dipendenze:**
+    ```bash
+    npm install
+    ```
+
+3.  **Avvia il server di sviluppo Angular:**
+    ```bash
+    ng serve
+    ```
+
+4.  Apri il browser e naviga a `http://localhost:4200/`. L'applicazione si connetterà automaticamente al backend WebSocket su `ws://localhost:8001/ws/angular-session`.
+
 ## 🧪 Testing
 
 ### Test Locale degli Agenti
@@ -158,7 +179,7 @@ python mcp_agent.py
 python main_api.py
 
 # In un altro terminale, testa con curl
-curl -X GET "http://localhost:8000/health"
+curl -X GET "http://localhost:8001/health"
 ```
 
 ## 📁 Struttura del Progetto
@@ -244,7 +265,7 @@ Se hai configurato LangSmith, puoi monitorare l'esecuzione degli agenti:
 - [ ] Aggiungere autenticazione e autorizzazione
 - [ ] Implementare rate limiting
 - [ ] Aggiungere metriche e monitoring
-- [ ] Creare frontend web per testing
+- [x] Creare frontend web per testing
 - [ ] Documentazione API con OpenAPI/Swagger
 
 ## 📄 Licenza
