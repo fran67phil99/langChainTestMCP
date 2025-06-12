@@ -27,37 +27,99 @@ from langchain_core.prompts import ChatPromptTemplate
 # Carica le variabili d'ambiente
 load_dotenv()
 
-# Funzione helper per preparare i messaggi per il riassunto MCP
-def _prepare_mcp_summarization_messages(last_user_message_content: str) -> Optional[List[BaseMessage]]:
+# Funzione helper per preparare i messaggi per task speciali (MCP summary, traduzione)
+def _prepare_special_task_messages(last_user_message_content: str) -> Optional[List[BaseMessage]]:
     """
-    Prepara i messaggi per LLM se rileva una richiesta di riassunto MCP.
-    Restituisce una lista di messaggi (solo SystemMessage per il riassunto) o None.
+    Prepara i messaggi per LLM se rileva una richiesta di task speciale come
+    il riassunto di dati MCP o la traduzione di testo.
+    Restituisce una lista di messaggi specifici per il task o None.
     """
     try:
-        mcp_summarization_request = json.loads(last_user_message_content)
-        if isinstance(mcp_summarization_request, dict) and mcp_summarization_request.get("action") == "summarize_mcp_data":
-            print("ℹ️ General Agent: Detected MCP data summarization request (helper function).")
-            original_query = mcp_summarization_request.get("original_query", "Dati ricevuti")
-            mcp_data = mcp_summarization_request.get("mcp_data", {})
-            
-            summarization_system_prompt_content = f"""Sei un assistente AI che deve trasformare dati JSON grezzi in una risposta discorsiva e amichevole in italiano.
-L'utente ha originariamente chiesto: '{original_query}'.
-I dati JSON ottenuti da uno strumento sono:
-{json.dumps(mcp_data, indent=2)}
+        input_data = json.loads(last_user_message_content)
+        if not isinstance(input_data, dict):
+            return None # Non è un dizionario, non può essere un task speciale formattato
 
-Basati sulla richiesta originale e sui dati JSON, fornisci una risposta chiara, utile e ben ragionata all'utente.
-Interpreta i dati e presentali in modo naturale e logico.
-Se i dati sono una lista, descrivi cosa rappresenta e trai delle conclusioni se possibile.
-Se sono un oggetto, spiega le sue proprietà principali e il loro significato.
-Se i dati sono vuoti o non sembrano utili, informa l'utente in modo appropriato, spiegando perché potrebbero non essere utili.
-Rispondi sempre in italiano.
-"""
-            return [SystemMessage(content=summarization_system_prompt_content)]
+        action = input_data.get("action")
+
+        if action == "summarize_mcp_data":
+            print("ℹ️ General Agent: Detected MCP data summarization request (helper function).")
+            original_query = input_data.get("original_query", "Dati ricevuti")
+            mcp_data = input_data.get("mcp_data", {}) # Default a dict vuoto se mancante
+            
+            # System prompt specifico per il riassunto dei dati MCP
+            # Nota: L'implementazione originale restituiva solo un SystemMessage.
+            # Per coerenza con l'idea di "messaggi pronti per LLM", includiamo anche un HumanMessage
+            # che contestualizza la richiesta per l'LLM, simile a come farebbe un utente.
+            # Se l'LLM è addestrato a rispondere solo a un SystemPrompt con dati specifici,
+            # allora solo il SystemMessage sarebbe sufficiente.
+            # Adottiamo un approccio più esplicito con System + Human.
+
+            summarization_system_prompt = (
+                "Sei un assistente AI specializzato nel trasformare dati grezzi (spesso in formato JSON) "
+                "provenienti da sistemi MCP (Model Context Protocol) in una risposta conversazionale e chiara per l'utente finale. "
+                "La risposta dovrebbe essere pertinente alla richiesta originale dell'utente e facile da capire. "
+                "Evita di menzionare esplicitamente 'JSON', 'MCP', 'API' o termini troppo tecnici, a meno che non sia strettamente necessario. "
+                "Presenta i dati come se li avessi recuperati e compresi tu stesso. "
+                "Se i dati MCP sono un errore o non contengono informazioni utili, spiegalo gentilmente. Rispondi in italiano."
+            )
+            summarization_human_prompt = (
+                f"Considera la seguente richiesta originale dell'utente: '{original_query}'.\n\n"
+                f"Ho ottenuto questi dati da un sistema interno (MCP): {json.dumps(mcp_data, indent=2)}.\n\n"
+                "Per favore, formula una risposta conversazionale e informativa basata su questi dati, "
+                "che risponda in modo chiaro alla richiesta originale dell'utente."
+            )
+            return [
+                SystemMessage(content=summarization_system_prompt),
+                HumanMessage(content=summarization_human_prompt)
+            ]
+
+        elif action == "translate_text":
+            text_to_translate = input_data.get("text_to_translate")
+            target_language = input_data.get("target_language")
+            original_query = input_data.get("original_query") # Opzionale, per contesto
+
+            if not text_to_translate or not target_language:
+                print("⚠️ General Agent: 'text_to_translate' o 'target_language' mancanti per l'azione di traduzione.")
+                return None # Dati insufficienti per procedere con il task speciale
+
+            print(f"ℹ️ General Agent: Detected text translation request to '{target_language}'. Original query: '{original_query}'")
+
+            translation_system_prompt = (
+                f"Sei un traduttore AI altamente qualificato. Il tuo compito è tradurre il testo fornito dall'utente "
+                f"nella lingua di destinazione specificata: '{target_language}'. "
+                "Traduci accuratamente, mantenendo il significato, il tono e il contesto originali. "
+                "Se il testo fornito è già nella lingua di destinazione, puoi semplicemente confermarlo o restituire il testo originale. "
+                "Fornisci solo il testo tradotto, senza frasi introduttive, commenti aggiuntivi o etichette, "
+                "a meno che la richiesta originale dell'utente non lo suggerisca esplicitamente. Rispondi in italiano se la lingua di destinazione è l'italiano, altrimenti nella lingua di destinazione."
+            )
+            # Se original_query è particolarmente rilevante per la traduzione (es. disambiguazione),
+            # potrebbe essere inserito qui o nel messaggio human. Per ora, ci concentriamo sul testo diretto.
+            translation_human_prompt = (
+                f"Testo da tradurre: \"{text_to_translate}\"\n"
+                f"Lingua di destinazione: {target_language}"
+            )
+
+            return [
+                SystemMessage(content=translation_system_prompt),
+                HumanMessage(content=translation_human_prompt)
+            ]
+
+        else:
+            # Azione non riconosciuta o mancante
+            if action: # Se c'era un'azione ma non era una di quelle gestite
+                print(f"ℹ️ General Agent: Azione '{action}' non gestita come task speciale.")
+            return None
+
     except json.JSONDecodeError:
-        # Non è una richiesta JSON valida, quindi non è per il riassunto MCP
-        pass
+        # Non è una richiesta JSON valida, quindi non è per un task speciale strutturato
+        pass # Restituirà None come da default
     except Exception as e:
-        print(f"⚠️ Errore durante la preparazione dei messaggi di riassunto MCP: {e}")
+        # Stampa l'eccezione per il debug, ma non interrompere il flusso normale dell'agente
+        # Restituirà None, permettendo all'agente di gestire l'input come una query standard.
+        print(f"⚠️ Errore durante la preparazione dei messaggi per task speciali: {e}")
+        import traceback
+        traceback.print_exc()
+
     return None
 
 # Funzione helper per preparare i messaggi standard con history
@@ -194,16 +256,18 @@ Rispondi sempre in italiano.
             elif isinstance(last_message_obj, dict) and last_message_obj.get('type') == 'human' and isinstance(last_message_obj.get('content'), str):
                  last_user_message_content = last_message_obj['content']
 
-        # Prova a preparare i messaggi per il riassunto MCP
-        mcp_summary_messages = _prepare_mcp_summarization_messages(last_user_message_content)
+        # Prova a preparare i messaggi per un task speciale (MCP summary, traduzione)
+        special_task_messages = _prepare_special_task_messages(last_user_message_content)
         
-        if mcp_summary_messages:
-            messages_for_llm = mcp_summary_messages
+        if special_task_messages:
+            # Se è un task speciale, usa i messaggi preparati appositamente
+            messages_for_llm = special_task_messages
+            print("✨ General Agent (Simple Node): Using special task messages.")
         else:
-            # Non è una richiesta di riassunto MCP, procedi normalmente con la history
-            # Aggiungi il system prompt di default prima della history
+            # Non è un task speciale, procedi normalmente con la history e il prompt di default
             messages_for_llm.append(default_system_prompt) 
             _append_history_messages(state['messages'], messages_for_llm)
+            print("💬 General Agent (Simple Node): Using default prompt and history.")
         
         # Genera la risposta
         response = await llm.ainvoke(messages_for_llm) # Modificato in await llm.ainvoke
@@ -275,19 +339,18 @@ Rispondi sempre in italiano.
             elif isinstance(last_message_obj, dict) and last_message_obj.get('type') == 'human' and isinstance(last_message_obj.get('content'), str):
                  last_user_message_content = last_message_obj['content']
 
-        # Prova a preparare i messaggi per il riassunto MCP
-        mcp_summary_messages = _prepare_mcp_summarization_messages(last_user_message_content)
+        # Prova a preparare i messaggi per un task speciale (MCP summary, traduzione)
+        special_task_messages = _prepare_special_task_messages(last_user_message_content)
 
-        if mcp_summary_messages:
-            # È una richiesta di riassunto MCP, usa i messaggi specifici.
-            # Anche se questo assicura che se il routing manda qui una richiesta di summarization, venga gestita.
-            messages_for_llm = mcp_summary_messages
-            print("ℹ️ General Agent (Reasoning Node): Using MCP summarization prompt via helper.")
+        if special_task_messages:
+            # Se è un task speciale, usa i messaggi preparati appositamente
+            messages_for_llm = special_task_messages
+            print("✨ General Agent (Reasoning Node): Using special task messages.")
         else:
-            # Non è una richiesta di riassunto MCP, procedi normalmente con la history e il prompt di ragionamento
-            # Aggiungi il system prompt di default prima della history
+            # Non è un task speciale, procedi normalmente con la history e il prompt di ragionamento
             messages_for_llm.append(default_system_prompt)
             _append_history_messages(state['messages'], messages_for_llm)
+            print("🤔 General Agent (Reasoning Node): Using default prompt and history.")
 
         # Genera la risposta con ragionamento
         response = await llm.ainvoke(messages_for_llm) # Modificato in await llm.ainvoke

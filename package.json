@@ -1,0 +1,39 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile di elaborazione delle richieste.",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc -w & nodemon dist/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fran67phil99/langChainTestMCP.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/fran67phil99/langChainTestMCP/issues"
+  },
+  "homepage": "https://github.com/fran67phil99/langChainTestMCP#readme",
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.30",
+    "@types/socket.io": "^3.0.2",
+    "nodemon": "^3.1.10",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@langchain/openai": "^0.5.12",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "eventsource": "^4.0.0",
+    "express": "^5.1.0",
+    "langchain": "^0.3.27",
+    "socket.io": "^4.8.1"
+  }
+}

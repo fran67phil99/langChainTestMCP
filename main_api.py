@@ -11,7 +11,8 @@ from dotenv import load_dotenv # Importa load_dotenv
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__))) # Aggiunge la directory corrente a sys.path
 
-from my_agent.orchestrator_agent import run_orchestrator, OrchestratorState
+# from my_agent.orchestrator_agent import run_orchestrator, OrchestratorState # Rimosso
+from my_agent.mcp_agent import run_mcp_agent # Aggiunto
 
 app = FastAPI()
 
@@ -56,17 +57,22 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
             _final_response_to_send = ""
             try:
-                # Esegui l'orchestratore con l'input dell'utente e il thread_id
-                orchestrator_result: OrchestratorState = await run_orchestrator(user_query, thread_id=thread_id)
+                # Esegui il mcp_agent refactored con l'input dell'utente e il thread_id
+                # run_mcp_agent ora restituisce Optional[str]
+                mcp_agent_result: Optional[str] = await run_mcp_agent(user_query, thread_id=thread_id)
                 
-                if orchestrator_result.get("error"):
-                    _final_response_to_send = f"Errore dall'orchestratore: {orchestrator_result.get('error')}"
+                if mcp_agent_result is not None:
+                    _final_response_to_send = mcp_agent_result
                 else:
-                    _final_response_to_send = orchestrator_result.get("final_response", "Nessuna risposta finale disponibile.")
+                    # Se run_mcp_agent restituisce None, significa che c'è stato un problema
+                    # o nessuna risposta è stata generata.
+                    _final_response_to_send = "Nessuna risposta disponibile o si è verificato un errore interno."
             
-            except Exception as e_process: # Catch any exception during orchestrator call or result handling
-                print(f"ERROR: WebSocket {thread_id}: Eccezione durante l'elaborazione del messaggio: {e_process}")
-                _final_response_to_send = f"Errore interno del server durante l'elaborazione: {e_process}"
+            except Exception as e_process: # Cattura eccezioni durante la chiamata a run_mcp_agent o la gestione del risultato
+                print(f"ERROR: WebSocket {thread_id}: Eccezione durante l'elaborazione del messaggio con mcp_agent: {e_process}")
+                import traceback
+                traceback.print_exc() # Stampa lo stack trace completo per un debug più approfondito
+                _final_response_to_send = f"Errore interno del server durante l'elaborazione: {str(e_process)}"
             
             print(f"INFO: WebSocket {thread_id}: Invio risposta: \"{_final_response_to_send}\"")
             # Invia risposta finale usando thread_id
