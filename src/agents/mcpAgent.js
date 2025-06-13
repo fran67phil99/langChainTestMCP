@@ -39,9 +39,14 @@ async function runMcpAgent(messages, selectedTool, userQuery, threadId) {
     logAgentActivity('mcp_agent', 'tool_executed', {
       toolName: selectedTool.name,
       dataReceived: true
-    });      // 2. Use LLM to elaborate the response based on raw data and user query
+    });    // 2. Use LLM to elaborate the response based on raw data and user query
+    // Filter and convert conversation history to valid LangChain messages
+    const validMessages = messages.slice(0, -1).filter(msg => 
+      msg && (msg.constructor.name === 'HumanMessage' || msg.constructor.name === 'AIMessage')
+    );
+    
     const llmMessages = [
-      ...messages.slice(0, -1), // Include conversation history
+      ...validMessages, // Include only valid conversation history
       new HumanMessage(`You are a professional business assistant for Mauden. The user asked: "${userQuery}"
 
 I obtained this data from the MCP tool "${selectedTool.name}":
@@ -49,7 +54,7 @@ ${JSON.stringify(mcpData, null, 2)}
 
 Please provide a professional, comprehensive, and well-formatted response in English that answers the user's question using this data.
 
-${messages.length > 1 ? 'IMPORTANT: Consider the conversation history above. If the user is asking about someone mentioned earlier (like asking "do you know someone with this name in Mauden?" after mentioning a specific person), focus specifically on that person in your response and provide their details from the data.' : ''}
+${validMessages.length > 0 ? 'IMPORTANT: Consider the conversation history above. If the user is asking about someone mentioned earlier (like asking "do you know someone with this name in Mauden?" after mentioning a specific person), focus specifically on that person in your response and provide their details from the data.' : ''}
 
 Guidelines:
 - Use appropriate emojis and Markdown formatting
@@ -60,7 +65,7 @@ Guidelines:
 - For salary queries, provide detailed statistical analysis
 - Include suggestions for related questions when appropriate
 - Be concise but informative
-- ${messages.length > 1 ? 'When referencing conversation context, be specific about which person or topic was discussed earlier' : ''}`)
+- ${validMessages.length > 0 ? 'When referencing conversation context, be specific about which person or topic was discussed earlier' : ''}`)
     ];
 
     const llmResponse = await llm.invoke(llmMessages);

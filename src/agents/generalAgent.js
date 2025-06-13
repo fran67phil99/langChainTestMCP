@@ -16,19 +16,24 @@ const llm = createTrackedLLM({
  */
 async function runGeneralAgent(messages, threadId) {
   console.log(`💬 General Agent: Processing general knowledge query`);
-  
-  try {
+    try {
     const userMessage = messages[messages.length - 1].content;
-      // Use LLM to handle general questions WITH conversation history
+    
+    // Filter and convert conversation history to valid LangChain messages
+    const validMessages = messages.slice(0, -1).filter(msg => 
+      msg && (msg.constructor.name === 'HumanMessage' || msg.constructor.name === 'AIMessage')
+    );
+    
+    // Use LLM to handle general questions WITH conversation history
     const llmMessages = [
-      ...messages.slice(0, -1), // Include previous conversation history (excluding current message)
-      new HumanMessage(`You are an intelligent and professional general AI assistant. ${messages.length > 1 ? `Based on our conversation history, the` : `The`} user asked this question: "${userMessage}"
+      ...validMessages, // Include only valid previous conversation history
+      new HumanMessage(`You are an intelligent and professional general AI assistant. ${validMessages.length > 0 ? `Based on our conversation history, the` : `The`} user asked this question: "${userMessage}"
 
 Since this question does not require specific Mauden company data (employees, interns, etc.), provide a useful and comprehensive general response.
 
 Guidelines:
 - Be professional but friendly
-- ${messages.length > 1 ? 'Take into account previous conversation context when relevant' : 'Provide comprehensive information for this new question'}
+- ${validMessages.length > 0 ? 'Take into account previous conversation context when relevant' : 'Provide comprehensive information for this new question'}
 - Provide accurate and useful information
 - Use appropriate emojis and Markdown formatting when relevant
 - If the question requires specific information you don't have, politely explain your limitations
@@ -36,7 +41,7 @@ Guidelines:
 - Respond in English (the Language Agent will handle translation)
 - Cover the topic comprehensively but concisely
 - Provide actionable advice when appropriate
-- ${messages.length > 1 ? 'Reference earlier discussion points if they help clarify the current question' : 'Start fresh with complete context'}
+- ${validMessages.length > 0 ? 'Reference earlier discussion points if they help clarify the current question' : 'Start fresh with complete context'}
 
 Your response should be complete and direct, without references to "tools" or underlying technical systems.`)
     ];
