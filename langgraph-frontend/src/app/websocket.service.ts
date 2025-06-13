@@ -1,51 +1,90 @@
 import { Injectable } from '@angular/core';
-import { Subject, Observable } from 'rxjs';
+import { Subject, Observable, BehaviorSubject } from 'rxjs';
+import { io, Socket } from 'socket.io-client';
+
+interface ChatMessage {
+  message?: string;
+  response?: string;
+  error?: string;
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class WebsocketService {
-  private websocket!: WebSocket;
-  private messageSubject: Subject<string> = new Subject<string>();
+  private socket!: Socket;
+  private messageSubject: Subject<ChatMessage> = new Subject<ChatMessage>();
+  private connectionStatus: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+  private threadId: string = '';
 
-  constructor() { }
-
-  public connect(url: string): void {
-    this.websocket = new WebSocket(url);
-
-    this.websocket.onopen = (event) => {
-      console.log('WebSocket connection opened:', event);
-    };
-
-    this.websocket.onmessage = (event) => {
-      console.log('WebSocket message received:', event.data);
-      this.messageSubject.next(event.data);
-    };
-
-    this.websocket.onerror = (event) => {
-      console.error('WebSocket error:', event);
-    };
-
-    this.websocket.onclose = (event) => {
-      console.log('WebSocket connection closed:', event);
-      // Optionally, attempt to reconnect or notify the application
-      // For example, you could emit a special message or try to reconnect:
-      // this.messageSubject.next('DISCONNECTED');
-      // setTimeout(() => this.connect(url), 3000); // Attempt to reconnect after 3 seconds
-    };
+  constructor() { 
+    this.threadId = this.generateThreadId();
   }
 
-  public sendMessage(message: string): void {
-    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-      this.websocket.send(message);
-      console.log('WebSocket message sent:', message);
+  private generateThreadId(): string {
+    return 'angular-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  }
+
+  public connect(serverUrl: string = 'http://localhost:8001'): void {
+    this.socket = io(serverUrl, {
+      query: {
+        threadId: this.threadId
+      }
+    });
+
+    this.socket.on('connect', () => {
+      console.log('Socket.IO connection opened with threadId:', this.threadId);
+      this.connectionStatus.next(true);
+    });
+
+    this.socket.on('system_message', (data: ChatMessage) => {
+      console.log('System message received:', data);
+      this.messageSubject.next({ message: data.message });
+    });
+
+    this.socket.on('agent_response', (data: ChatMessage) => {
+      console.log('Agent response received:', data);
+      this.messageSubject.next({ response: data.response });
+    });
+
+    this.socket.on('error_message', (data: ChatMessage) => {
+      console.error('Error message received:', data);
+      this.messageSubject.next({ error: data.message });
+    });
+
+    this.socket.on('disconnect', () => {
+      console.log('Socket.IO connection closed');
+      this.connectionStatus.next(false);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('Socket.IO connection error:', error);
+      this.connectionStatus.next(false);
+    });
+  }  public sendMessage(query: string): void {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('user_message', { 
+        message: query, 
+        threadId: this.threadId 
+      });
+      console.log('Socket.IO message sent:', query);
     } else {
-      console.error('WebSocket is not open. Message not sent:', message);
-      // Optionally, queue the message or handle the error
+      console.error('Socket.IO is not connected. Message not sent:', query);
+      this.messageSubject.next({ error: 'Connessione non disponibile. Riprova.' });
     }
   }
 
-  public getMessages(): Observable<string> {
+  public getMessages(): Observable<ChatMessage> {
     return this.messageSubject.asObservable();
+  }
+
+  public getConnectionStatus(): Observable<boolean> {
+    return this.connectionStatus.asObservable();
+  }
+
+  public disconnect(): void {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   }
 }

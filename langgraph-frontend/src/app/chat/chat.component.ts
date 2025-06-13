@@ -34,15 +34,31 @@ export class ChatComponent implements OnInit, AfterViewChecked {
       gfm: true
     });
   }  ngOnInit(): void {
-    this.websocketService.connect('ws://localhost:8001/ws/angular-session');
-    this.websocketService.getMessages().subscribe(async (message: string) => {
-      this.isTyping = false;
-      await this.addMessage(message, false);
+    this.websocketService.connect('http://localhost:8001');
+    
+    this.websocketService.getConnectionStatus().subscribe(isConnected => {
+      this.isConnected = isConnected;
+      if (isConnected) {
+        this.addMessage('Ciao! Sono il tuo assistente AI. Come posso aiutarti oggi?', false);
+      } else {
+        this.addMessage('Connessione persa. Tentativo di riconnessione...', false);
+      }
     });
 
-    // Aggiungi messaggio di benvenuto
-    this.addMessage('Ciao! Sono il tuo assistente AI. Come posso aiutarti oggi?', false);
-    this.isConnected = true;
+    this.websocketService.getMessages().subscribe(async (messageData) => {
+      this.isTyping = false;
+      
+      if (messageData.message) {
+        // System message
+        await this.addMessage(messageData.message, false);
+      } else if (messageData.response) {
+        // Agent response
+        await this.addMessage(messageData.response, false);
+      } else if (messageData.error) {
+        // Error message
+        await this.addMessage(`❌ Errore: ${messageData.error}`, false);
+      }
+    });
   }
 
   ngAfterViewChecked(): void {
@@ -68,7 +84,6 @@ export class ChatComponent implements OnInit, AfterViewChecked {
 
     this.messages.push(message);
   }
-
   sendMessage(): void {
     if (this.newMessage.trim() !== '' && this.isConnected) {
       this.addMessage(this.newMessage, true);

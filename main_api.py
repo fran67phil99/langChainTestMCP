@@ -1,116 +1,157 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import os
-import json # Aggiunto per coerenza con le modifiche precedenti
-from dotenv import load_dotenv # Importa load_dotenv
-
-# Assicurati che i percorsi siano corretti per importare da my_agent
-# Questo potrebbe richiedere aggiustamenti a sys.path se main_api.py è nella root
-# e my_agent è una sottocartella.
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__))) # Aggiunge la directory corrente a sys.path
-
-# from my_agent.orchestrator_agent import run_orchestrator, OrchestratorState # Rimosso
-from my_agent.mcp_agent import run_mcp_agent # Aggiunto
+import aiohttp
+from dotenv import load_dotenv
 
 app = FastAPI()
 
 # Configurazione CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Per sviluppo; in produzione, restringi questo
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: dict[str, WebSocket] = {} # thread_id -> WebSocket
+@app.get("/tools")
+async def get_tools():
+    """MCP tools discovery endpoint"""
+    tools = [
+        {
+            "name": "get_interns_mcp",
+            "description": "Retrieves the list of interns, trainees, and students from Mauden company. Get information about internship programs, university partnerships, and current/past interns.",
+            "endpoint_url": "http://localhost:8080/interns",
+            "method": "GET", 
+            "parameters": {},
+            "mcp_source": "http://localhost:8000/stagisti"
+        },        {
+            "name": "get_employees_csv_mcp",
+            "description": "Retrieves complete employee data from Mauden including roles, ages, salaries, wages, earnings, and compensation information. Access comprehensive workforce analytics and employee demographics.",
+            "endpoint_url": "http://localhost:8080/employees-csv", 
+            "method": "GET",
+            "parameters": {},
+            "mcp_source": "http://localhost:8000/dati-csv"
+        },
+        {
+            "name": "get_model_summary_mcp", 
+            "description": "Gets the summary and details of a specific model from the MCP system. Retrieve model information, parameters, and performance metrics.",
+            "endpoint_url": "http://localhost:8080/models/{model_name}/summary",
+            "method": "GET",
+            "parameters": {
+                "model_name": {"type": "string", "description": "The name of the model", "required": True}
+            }
+        }
+    ]
+    return tools
 
-    async def connect(self, websocket: WebSocket, thread_id: str):
-        await websocket.accept()
-        self.active_connections[thread_id] = websocket
-
-    def disconnect(self, thread_id: str):
-        if thread_id in self.active_connections:
-            del self.active_connections[thread_id]
-
-    async def send_personal_message(self, message: str, thread_id: str):
-        if thread_id in self.active_connections:
-            await self.active_connections[thread_id].send_text(message)
-
-manager = ConnectionManager()
-
-@app.websocket("/ws/{thread_id}")
-async def websocket_endpoint(websocket: WebSocket, thread_id: str):
-    await manager.connect(websocket, thread_id)
-    print(f"INFO: WebSocket {thread_id}: Frontend connesso.")
+@app.get("/interns")
+async def get_interns():
+    """Get complete list of current and past interns at Mauden"""
     try:
-        while True:
-            user_query = await websocket.receive_text()
-            print(f"INFO: WebSocket {thread_id}: Ricevuto messaggio: \"{user_query}\"")
-            
-            # Invia messaggio di elaborazione usando thread_id
-            await manager.send_personal_message(f"Elaborazione: \"{user_query}\"...", thread_id)
-
-            _final_response_to_send = ""
-            try:
-                # Esegui il mcp_agent refactored con l'input dell'utente e il thread_id
-                # run_mcp_agent ora restituisce Optional[str]
-                mcp_agent_result: Optional[str] = await run_mcp_agent(user_query, thread_id=thread_id)
-                
-                if mcp_agent_result is not None:
-                    _final_response_to_send = mcp_agent_result
+        async with aiohttp.ClientSession() as session:
+            async with session.get("http://localhost:8000/stagisti") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    stagisti = data.get("dipendenti", [])
+                    interns = [emp for emp in stagisti if emp.get("ruolo") == "stagista"]
+                    return {
+                        "interns": interns, 
+                        "total": len(interns),
+                        "source": "MCP-8000"
+                    }
                 else:
-                    # Se run_mcp_agent restituisce None, significa che c'è stato un problema
-                    # o nessuna risposta è stata generata.
-                    _final_response_to_send = "Nessuna risposta disponibile o si è verificato un errore interno."
-            
-            except Exception as e_process: # Cattura eccezioni durante la chiamata a run_mcp_agent o la gestione del risultato
-                print(f"ERROR: WebSocket {thread_id}: Eccezione durante l'elaborazione del messaggio con mcp_agent: {e_process}")
-                import traceback
-                traceback.print_exc() # Stampa lo stack trace completo per un debug più approfondito
-                _final_response_to_send = f"Errore interno del server durante l'elaborazione: {str(e_process)}"
-            
-            print(f"INFO: WebSocket {thread_id}: Invio risposta: \"{_final_response_to_send}\"")
-            # Invia risposta finale usando thread_id
-            await manager.send_personal_message(_final_response_to_send, thread_id)
+                    return {
+                        "error": f"MCP service returned status {response.status}",
+                        "interns": [],
+                        "total": 0
+                    }
+    except Exception as e:
+        return {
+            "error": f"Failed to connect to MCP service: {str(e)}",
+            "interns": [],
+            "total": 0
+        }
 
-    except WebSocketDisconnect:
-        print(f"INFO: WebSocket {thread_id}: Frontend disconnesso.")
-        # manager.disconnect è gestito da finally, non è necessario qui esplicitamente.
-    except Exception as e_ws:
-        # Log a più dettagliato errore per il debug lato server
-        import traceback
-        print(f"ERROR: WebSocket {thread_id}: Errore imprevisto nella connessione: {e_ws}\\n{traceback.format_exc()}")
-        # Invia un errore generico al client se la connessione è ancora abbastanza aperta per farlo
-        try:
-            # Invia messaggio di errore usando thread_id
-            await manager.send_personal_message("Errore: Si è verificato un problema con la connessione WebSocket.", thread_id)
-        except Exception as e_send_error:
-            print(f"ERROR: WebSocket {thread_id}: Impossibile inviare messaggio di errore WebSocket al client: {e_send_error}")
-    finally:
-        print(f"INFO: WebSocket {thread_id}: Chiusura connessione e pulizia.")
-        manager.disconnect(thread_id)
+@app.get("/employees-csv")
+async def get_employees_csv():
+    """Get detailed Mauden employee data including demographics, roles, and salary information"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("http://localhost:8000/dati-csv") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        "employees": data, 
+                        "total": len(data),
+                        "source": "MCP-8000-CSV"
+                    }
+                else:
+                    return {
+                        "error": f"MCP service returned status {response.status}",
+                        "employees": [],
+                        "total": 0
+                    }
+    except Exception as e:
+        return {
+            "error": f"Failed to connect to MCP service: {str(e)}",
+            "employees": [],
+            "total": 0
+        }
+
+@app.get("/models/{model_name}/summary")
+async def get_model_summary(model_name: str):
+    """Get model summary information"""
+    model_summaries = {
+        "alpha": {
+            "name": "alpha",
+            "type": "classification",
+            "accuracy": 0.95,
+            "parameters": "10M",
+            "last_updated": "2024-01-15"
+        },
+        "beta": {
+            "name": "beta", 
+            "type": "regression",
+            "accuracy": 0.87,
+            "parameters": "25M",
+            "last_updated": "2024-01-20"
+        }
+    }
+    
+    if model_name in model_summaries:
+        return model_summaries[model_name]
+    else:
+        return {
+            "name": model_name,
+            "type": "unknown",
+            "accuracy": None,
+            "parameters": "Unknown",
+            "last_updated": None,
+            "note": f"Model '{model_name}' not found in registry"
+        }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "OK", 
+        "service": "MCP Proxy Server",
+        "port": 8080,
+        "mcp_target": "http://localhost:8000"
+    }
 
 if __name__ == "__main__":
-    # Carica le variabili d'ambiente dal file .env
-    load_dotenv() # Chiamata a load_dotenv()
+    load_dotenv()
 
-    # Configura LangSmith come fai in orchestrator_agent.py
-    LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
-    if LANGCHAIN_API_KEY:
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-        # Usa un nome di progetto diverso per distinguere le tracce API da quelle dei test diretti
-        os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT_API", "MyLangGraphProgetto-API") 
-        print("✅ LangSmith tracing abilitato per l\'API FastAPI.")
-    else:
-        print("ℹ️ LangSmith tracing non abilitato per l\'API FastAPI (LANGCHAIN_API_KEY non trovata).")
-    
-    print("Avvio server FastAPI con Uvicorn su http://localhost:8001")
-    print("Endpoint WebSocket disponibile su ws://localhost:8001/ws/{thread_id}")
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    print("🚀 Starting MCP Proxy Server on http://localhost:8080")
+    print("📡 Proxying to MCP Server on http://localhost:8000")
+    print("🔗 Available HTTP endpoints:")
+    print("  - GET /tools - MCP tools discovery")
+    print("  - GET /interns - Mauden interns list")
+    print("  - GET /employees-csv - Employee data CSV")
+    print("  - GET /models/{model_name}/summary - Model summaries")
+    print("  - GET /health - Health check")
+    uvicorn.run(app, host="0.0.0.0", port=8080)
 

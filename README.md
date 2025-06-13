@@ -1,20 +1,30 @@
-# Orchestratore LangGraph con MCP
+# Orchestratore LangGraph con MCP - Full Stack
 
-Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile di elaborazione delle richieste.
+Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile. Il progetto include sia un backend Node.js che un frontend Angular per un'esperienza completa.
 
-## 🏗️ Architettura
+## 🏗️ Architettura Completa
 
-Il progetto implementa un'architettura a tre agenti specializzati:
+Il progetto implementa un'architettura full-stack con tre layer principali:
 
-- **🎭 Orchestrator Agent**: Router intelligente che analizza le richieste e le dirige agli agenti appropriati
-- **🤖 MCP Agent**: Specializzato nell'esecuzione di strumenti esterni tramite Model Context Protocol
-- **💬 General Agent**: Gestisce conversazioni generali e converte dati strutturati in risposte naturali
+### Frontend Layer
+- **🎨 Angular Frontend**: Interfaccia utente moderna con chat in tempo reale
+- **🔗 Socket.IO Client**: Comunicazione WebSocket con il backend
+
+### Backend Layer  
+- **🌐 Node.js Server**: Server backend con Socket.IO per orchestrazione
+- **🎭 Orchestrator Agent**: Router intelligente che analizza le richieste
+- **🤖 MCP Agent**: Specializzato nell'esecuzione di strumenti esterni
+- **💬 General Agent**: Gestisce conversazioni generali
+
+### Services Layer
+- **🐍 MCP Server Python**: Server FastAPI per tools MCP
+- **🔧 External APIs**: OpenAI, LangSmith, altri servizi
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   FastAPI       │    │   Orchestrator   │    │   MCP Server    │
-│   WebSocket     │◄──►│     Agent        │◄──►│   (localhost)   │
-│   Endpoint      │    │   (Router)       │    │     :8080       │
+│   Angular       │    │   Node.js        │    │   MCP Server    │
+│   Frontend      │◄──►│   Backend        │◄──►│   Python        │
+│   :4200         │    │   :8001          │    │   :8080         │
 └─────────────────┘    └─────────┬────────┘    └─────────────────┘
                                  │
                     ┌────────────┴────────────┐
@@ -49,6 +59,59 @@ Il progetto implementa un'architettura a tre agenti specializzati:
 - Integrazione **LangSmith** per tracing
 - Logging dettagliato di tutte le operazioni
 - Monitoraggio stato agenti in tempo reale
+
+## 🚀 Quick Start
+
+### Prerequisiti
+- **Node.js** (v18+)
+- **Python** (v3.8+)
+- **Angular CLI** (`npm install -g @angular/cli`)
+- **OpenAI API Key**
+
+### Avvio Rapido
+
+1. **Clona il repository**
+   ```bash
+   git clone <repository-url>
+   cd progettoLangGraphProva
+   ```
+
+2. **Configura le variabili d'ambiente**
+   ```bash
+   # Modifica il file .env con la tua OpenAI API Key
+   OPENAI_API_KEY="sk-your-actual-openai-api-key"
+   ```
+
+3. **Avvia tutti i servizi** (Windows)
+   ```bash
+   # Usando PowerShell
+   .\start-all.ps1
+   
+   # Oppure usando Batch
+   start-all.bat
+   ```
+
+4. **Accedi all'applicazione**
+   - 🎨 **Frontend Angular**: http://localhost:4200
+   - 🌐 **Backend Node.js**: http://localhost:8001  
+   - 🐍 **MCP Server Python**: http://localhost:8080
+
+### Avvio Manuale
+
+Se preferisci avviare i servizi manualmente:
+
+```bash
+# 1. Avvia il server MCP Python (terminale 1)
+python main_api.py
+
+# 2. Compila e avvia il backend Node.js (terminale 2)
+npm run build
+npm start
+
+# 3. Avvia il frontend Angular (terminale 3)
+cd langgraph-frontend
+ng serve --open
+```
 
 ## 🛠️ Installazione
 
@@ -224,6 +287,79 @@ Modifica `mcp_servers.json` per aggiungere nuovi server:
   ]
 }
 ```
+
+## 🔧 Configurazione MCP Multi-Server
+
+### Sistema di Configurazione Dinamica
+
+Il sistema ora supporta la **configurazione di multipli server MCP** tramite file JSON, permettendo di aggiungere, rimuovere e gestire server senza modificare il codice.
+
+#### File di Configurazione: `mcp_servers.json`
+
+```json
+{
+  "servers": [
+    {
+      "id": "mauden_server",
+      "name": "Mauden MCP Server",
+      "url": "http://localhost:8080",
+      "tools_endpoint": "/tools",
+      "description": "Server MCP principale per tools Mauden",
+      "enabled": true,
+      "timeout": 10000,
+      "retry_attempts": 3,
+      "priority": 1
+    },
+    {
+      "id": "weather_api",
+      "name": "Weather API Server", 
+      "url": "http://localhost:8081",
+      "tools_endpoint": "/api/tools",
+      "description": "Server per dati meteorologici",
+      "enabled": true,
+      "priority": 2
+    }
+  ],
+  "discovery": {
+    "enabled": true,
+    "timeout_per_server": 10000,
+    "max_concurrent_discoveries": 3,
+    "cache_ttl_minutes": 5,
+    "fallback_to_mock": true
+  }
+}
+```
+
+#### CLI per Gestione Server
+
+```bash
+# Lista server configurati
+node mcp-config-cli.js list
+
+# Aggiungi nuovo server
+node mcp-config-cli.js add \
+  --id new_server \
+  --name "New MCP Server" \
+  --url "http://localhost:8082" \
+  --description "Nuovo server MCP"
+
+# Rimuovi server
+node mcp-config-cli.js remove --id server_id
+
+# Testa connessioni
+node mcp-config-cli.js test --all
+```
+
+#### Funzionalità Multi-Server
+
+- **🔍 Discovery Parallelo**: Connessione concorrente a multipli server
+- **⚡ Cache Intelligente**: Cache separata per ogni server con TTL configurabile  
+- **🔄 Retry Automatico**: Retry con exponential backoff per server temporaneamente down
+- **📊 Priorità Server**: Ordinamento server per priorità configurabile
+- **🛡️ Fallback Robusto**: Continuità di servizio anche con server parzialmente down
+- **🎯 Tool Identification**: Ogni tool include informazioni sul server di origine
+
+Vedi `MCP-MULTI-SERVER.md` per la documentazione completa.
 
 ## 🐛 Troubleshooting
 

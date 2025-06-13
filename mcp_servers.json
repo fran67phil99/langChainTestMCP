@@ -3,8 +3,46 @@
     {
       "id": "mauden_server",
       "name": "Mauden MCP Server",
-      "url": "http://localhost:8080/sse",
-      "description": "Server MCP principale per tools Mauden"
+      "url": "http://localhost:8080",
+      "tools_endpoint": "/tools",
+      "description": "Server MCP principale per tools Mauden",
+      "enabled": true,
+      "timeout": 10000,
+      "retry_attempts": 3,
+      "priority": 1
+    },
+    {
+      "enabled": true,
+      "timeout": 10000,
+      "retry_attempts": 3,
+      "priority": 2,
+      "tools_endpoint": "/api/tools",
+      "id": "weather_server",
+      "name": "Weather MCP Server",
+      "url": "http://localhost:8081",
+      "description": "Server MCP per dati meteorologici"
+    },
+    {
+      "enabled": false,
+      "timeout": 15000,
+      "retry_attempts": 2,
+      "priority": 3,
+      "tools_endpoint": "/analytics/tools",
+      "id": "analytics_server",
+      "name": "Analytics MCP Server",
+      "url": "http://localhost:8083",
+      "description": "Server per analytics e reportistica aziendale"
     }
-  ]
+  ],
+  "discovery": {
+    "enabled": true,
+    "timeout_per_server": 10000,
+    "max_concurrent_discoveries": 3,
+    "cache_ttl_minutes": 5,
+    "fallback_to_mock": true
+  },
+  "tools_override": {
+    "enabled": false,
+    "custom_tools": []
+  }
 }
