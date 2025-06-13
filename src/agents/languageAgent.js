@@ -1,12 +1,11 @@
 // Language Agent - Multilingual support with automatic detection and translation
 const { HumanMessage } = require('@langchain/core/messages');
-const { ChatOpenAI } = require('@langchain/openai');
+const { createTrackedLLM, logAgentActivity } = require('../utils/langsmithConfig');
 
-// Initialize LLM for language processing
-const llm = new ChatOpenAI({
+// Initialize LLM for language processing with LangSmith tracing
+const llm = createTrackedLLM({
   modelName: "gpt-3.5-turbo",
   temperature: 0.3, // Lower temperature for more consistent translations
-  openAIApiKey: process.env.OPENAI_API_KEY
 });
 
 /**
@@ -16,6 +15,9 @@ const llm = new ChatOpenAI({
  */
 async function detectAndTranslateToEnglish(userInput) {
   console.log(`🌍 Language Agent: Detecting language and translating to English...`);
+  
+  // Log language detection start
+  logAgentActivity('language_agent', 'detection_start', { userInput });
   
   try {
     const detectionMessages = [
@@ -36,12 +38,19 @@ Rules:
 - If already in English, translatedText should be the same as original
 - Provide accurate translation maintaining the original meaning and intent
 - Be especially careful with technical terms and proper nouns`)
-    ];
-
-    const response = await llm.invoke(detectionMessages);
+    ];    const response = await llm.invoke(detectionMessages);
     const result = JSON.parse(response.content);
     
     console.log(`✅ Language detected: ${result.languageName} (${result.detectedLanguage}), Confidence: ${result.confidenceLevel}`);
+    
+    // Log successful detection
+    logAgentActivity('language_agent', 'detection_success', {
+      detectedLanguage: result.detectedLanguage,
+      languageName: result.languageName,
+      confidenceLevel: result.confidenceLevel,
+      originalText: userInput,
+      translatedText: result.translatedText
+    });
     
     return {
       detectedLanguage: result.detectedLanguage,
@@ -53,6 +62,13 @@ Rules:
     
   } catch (error) {
     console.error(`❌ Language Detection Error:`, error);
+    
+    // Log detection error
+    logAgentActivity('language_agent', 'detection_error', {
+      error: error.message,
+      userInput
+    });
+    
     // Fallback: assume English
     return {
       detectedLanguage: 'en',

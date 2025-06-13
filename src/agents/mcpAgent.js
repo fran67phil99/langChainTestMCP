@@ -1,12 +1,11 @@
 // MCP Agent - Specialized agent for handling Mauden company data through MCP tools
 const { HumanMessage } = require('@langchain/core/messages');
-const { ChatOpenAI } = require('@langchain/openai');
+const { createTrackedLLM, logAgentActivity } = require('../utils/langsmithConfig');
 
-// Initialize LLM for MCP data processing
-const llm = new ChatOpenAI({
+// Initialize LLM for MCP data processing with LangSmith tracing
+const llm = createTrackedLLM({
   modelName: "gpt-3.5-turbo",
   temperature: 0.7,
-  openAIApiKey: process.env.OPENAI_API_KEY
 });
 
 /**
@@ -20,6 +19,13 @@ const llm = new ChatOpenAI({
 async function runMcpAgent(messages, selectedTool, userQuery, threadId) {
   console.log(`🔧 MCP Agent: Processing query with tool: ${selectedTool?.name}`);
   
+  // Log MCP agent start
+  logAgentActivity('mcp_agent', 'processing_start', {
+    toolName: selectedTool?.name,
+    userQuery,
+    threadId
+  });
+  
   try {
     if (!selectedTool) {
       throw new Error('No suitable MCP tool found');
@@ -28,6 +34,12 @@ async function runMcpAgent(messages, selectedTool, userQuery, threadId) {
     // 1. Call the MCP tool to get raw data
     const mcpData = await selectedTool.call({});
     console.log(`✅ MCP Agent: Tool executed successfully`);
+    
+    // Log successful tool execution
+    logAgentActivity('mcp_agent', 'tool_executed', {
+      toolName: selectedTool.name,
+      dataReceived: true
+    });
     
     // 2. Use LLM to elaborate the response based on raw data and user query
     const llmMessages = [

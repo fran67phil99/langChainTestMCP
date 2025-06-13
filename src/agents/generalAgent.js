@@ -1,12 +1,11 @@
 // General Agent - Specialized agent for handling general knowledge and non-company queries
 const { HumanMessage } = require('@langchain/core/messages');
-const { ChatOpenAI } = require('@langchain/openai');
+const { createTrackedLLM, logAgentActivity } = require('../utils/langsmithConfig');
 
-// Initialize LLM for general knowledge processing
-const llm = new ChatOpenAI({
+// Initialize LLM for general knowledge processing with LangSmith tracing
+const llm = createTrackedLLM({
   modelName: "gpt-3.5-turbo",
   temperature: 0.7,
-  openAIApiKey: process.env.OPENAI_API_KEY
 });
 
 /**

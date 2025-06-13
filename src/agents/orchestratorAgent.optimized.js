@@ -3,14 +3,32 @@ const { HumanMessage, AIMessage } = require('@langchain/core/messages');
 const { processWithLanguageSupport } = require('./languageAgent');
 const { runMcpAgent, selectMcpTool, shouldUseMcpAgent } = require('./mcpAgent');
 const { runGeneralAgent, shouldUseGeneralAgent } = require('./generalAgent');
+const { initializeLangSmith, logAgentActivity } = require('../utils/langsmithConfig');
+
+// Initialize LangSmith tracing
+initializeLangSmith();
 
 async function runOrchestratorOptimized(userInput, threadId, existingMessages = []) {
   console.log(`🚀 Modular Orchestrator: Starting multilingual routing for: "${userInput}"`);
+  
+  // Log orchestrator activity for LangSmith
+  logAgentActivity('orchestrator', 'routing_start', {
+    userInput,
+    threadId,
+    messageCount: existingMessages.length
+  });
   
   try {
     // Use Language Agent to handle multilingual processing
     const result = await processWithLanguageSupport(userInput, async (englishQuery) => {
       return await processEnglishQuery(englishQuery, threadId, existingMessages);
+    });
+    
+    // Log successful completion
+    logAgentActivity('orchestrator', 'routing_completed', {
+      originalLanguage: result.originalLanguage,
+      selectedAgent: result.selectedAgent,
+      success: true
     });
     
     // Return the final result with proper language handling
@@ -23,9 +41,17 @@ async function runOrchestratorOptimized(userInput, threadId, existingMessages = 
       selectedAgent: result.englishProcessing.selectedAgent,
       finalResponse: result.finalResponse
     };
-    
-  } catch (error) {
+      } catch (error) {
     console.error('❌ Modular Orchestrator Error:', error);
+    
+    // Log error for LangSmith
+    logAgentActivity('orchestrator', 'routing_error', {
+      error: error.message,
+      userInput,
+      threadId,
+      success: false
+    });
+    
     return {
       messages: [...existingMessages, new HumanMessage(userInput)],
       userQuery: userInput,

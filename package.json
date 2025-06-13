@@ -38,6 +38,7 @@
     "eventsource": "^4.0.0",
     "express": "^5.1.0",
     "langchain": "^0.3.27",
+    "langsmith": "^0.3.31",
     "socket.io": "^4.8.1"
   }
 }
