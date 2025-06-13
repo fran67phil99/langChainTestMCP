@@ -32,6 +32,26 @@
       "name": "Analytics MCP Server",
       "url": "http://localhost:8083",
       "description": "Server per analytics e reportistica aziendale"
+    },
+    {
+      "enabled": true,
+      "timeout": 30000,
+      "retry_attempts": 3,
+      "priority": 4,
+      "tools_endpoint": "/api/mcp/tools",
+      "id": "azure_server",
+      "name": "Azure MCP Server",
+      "url": "https://your-azure-function-app.azurewebsites.net",
+      "description": "Server MCP per servizi cloud Azure (Storage, AI, Functions)",
+      "headers": {
+        "x-functions-key": "YOUR_AZURE_FUNCTION_KEY",
+        "Content-Type": "application/json"
+      },
+      "authentication": {
+        "type": "azure_ad",
+        "tenant_id": "YOUR_TENANT_ID",
+        "client_id": "YOUR_CLIENT_ID"
+      }
     }
   ],
   "discovery": {
