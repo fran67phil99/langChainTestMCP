@@ -18,14 +18,20 @@ function initializeLangSmith() {
       'LANGCHAIN_PROJECT'
     ];
     
-    const missingVars = requiredVars.filter(varName => !process.env[varName]);
+    const missingVars = requiredVars.filter(varName => !process.env[varName] || process.env[varName] === "");
     
     if (missingVars.length > 0) {
       console.warn(`⚠️ LangSmith: Missing environment variables: ${missingVars.join(', ')}`);
-      console.warn('⚠️ LangSmith: Tracing may not work properly');
+      console.warn('⚠️ LangSmith: Traces will not be sent to LangSmith dashboard');
+      console.log('📝 LangSmith: System will continue to work normally with local logging only');
+      return false; // Indicate LangSmith is not properly configured
+    } else {
+      console.log('✅ LangSmith: Fully configured and ready for monitoring');
+      return true; // Indicate LangSmith is properly configured
     }
   } else {
     console.log('❌ LangSmith: Tracing disabled (LANGCHAIN_TRACING_V2 not set to "true")');
+    return false;
   }
 }
 
@@ -67,6 +73,7 @@ function addTraceMetadata(metadata) {
 
 /**
  * Log agent activity for LangSmith monitoring
+ * Only logs when LangSmith is properly configured
  * @param {string} agentName - Name of the agent
  * @param {string} action - Action being performed
  * @param {Object} context - Additional context
@@ -80,8 +87,16 @@ function logAgentActivity(agentName, action, context = {}) {
     ...context
   };
   
-  if (process.env.LANGCHAIN_TRACING_V2 === "true") {
+  // Check if LangSmith is properly configured
+  const isLangSmithConfigured = process.env.LANGCHAIN_TRACING_V2 === "true" && 
+                                process.env.LANGCHAIN_API_KEY && 
+                                process.env.LANGCHAIN_API_KEY !== "";
+  
+  if (isLangSmithConfigured) {
     console.log(`📋 LangSmith [${agentName}]: ${action}`, context);
+  } else {
+    // Still log locally for debugging, but indicate LangSmith is not configured
+    console.log(`📝 Local [${agentName}]: ${action}`, context);
   }
   
   return logEntry;

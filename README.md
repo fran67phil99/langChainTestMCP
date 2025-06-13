@@ -55,10 +55,12 @@ Il progetto implementa un'architettura full-stack con tre layer principali:
 - Supporto CORS per integrazione frontend
 - Messaggistica bidirezionale
 
-### 📊 Osservabilità
-- Integrazione **LangSmith** per tracing
-- Logging dettagliato di tutte le operazioni
-- Monitoraggio stato agenti in tempo reale
+### 📊 Osservabilità e Monitoraggio
+- Integrazione **LangSmith** per tracing e debugging avanzato
+- Logging dettagliato di tutte le operazioni degli agenti
+- Monitoraggio stato agenti e performance in tempo reale
+- Tracciamento completo delle conversazioni multilingue
+- Metriche di utilizzo token e latenza per ogni agente
 
 ## 🚀 Quick Start
 
@@ -78,8 +80,13 @@ Il progetto implementa un'architettura full-stack con tre layer principali:
 
 2. **Configura le variabili d'ambiente**
    ```bash
-   # Modifica il file .env con la tua OpenAI API Key
+   # Modifica il file .env con la tua OpenAI API Key e opzionalmente LangSmith
    OPENAI_API_KEY="sk-your-actual-openai-api-key"
+   
+   # Optional: Aggiungi LangSmith per debugging e monitoraggio avanzato
+   LANGCHAIN_TRACING_V2="true"
+   LANGCHAIN_API_KEY="your_langsmith_api_key"
+   LANGCHAIN_PROJECT="MyLangGraphProgetto-NodeJS"
    ```
 
 3. **Avvia tutti i servizi** (Windows)
@@ -621,6 +628,257 @@ node mcp-config-cli.js test --all
 
 Vedi `MCP-MULTI-SERVER.md` per la documentazione completa.
 
+## 📊 Integrazione LangSmith - Monitoraggio e Debugging
+
+### Panoramica LangSmith
+
+Il sistema integra **LangSmith** per fornire osservabilità completa e capacità di debugging avanzate su tutti gli agenti del sistema. LangSmith consente di:
+
+- **🔍 Tracciare** ogni esecuzione di agente e routing decision
+- **📈 Monitorare** performance, latenza e utilizzo token
+- **🐛 Debuggare** problemi di routing e selezione strumenti
+- **📊 Analizzare** pattern di utilizzo e efficacia del sistema
+- **🌍 Tracciare** flussi multilingue completi
+
+### Configurazione LangSmith
+
+#### 1. Setup Ambiente
+
+Aggiungi le seguenti variabili al tuo file `.env`:
+
+```env
+# LangSmith Configuration (completamente opzionale)
+LANGCHAIN_TRACING_V2="true"
+LANGCHAIN_API_KEY="lsv2_pt_your_langsmith_api_key_here"
+LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
+LANGCHAIN_PROJECT="MyLangGraphProgetto-NodeJS"
+```
+
+#### 2. Ottenere la API Key LangSmith
+
+1. Vai su [LangSmith](https://smith.langchain.com/)
+2. Crea un account o accedi
+3. Vai su **Settings** > **API Keys**
+4. Crea una nuova API key
+5. Copia la chiave nel file `.env`
+
+#### 3. Verifica Configurazione
+
+```bash
+# Test della configurazione LangSmith
+node test-langsmith.js
+
+# Il sistema funziona perfettamente anche SENZA LangSmith configurato
+npm start  # Funziona sempre, con o senza LangSmith
+```
+
+### Funzionalità di Monitoring
+
+#### Tracciamento Automatico
+
+Il sistema traccia automaticamente:
+
+```javascript
+// Routing decisions dell'orchestratore
+await logAgentActivity('orchestrator', 'routing_decision', {
+    user_input: message,
+    selected_agent: agentType,
+    routing_reason: 'Based on LLM analysis',
+    confidence: 'high'
+});
+
+// Detection linguistiche
+await logAgentActivity('language', 'language_detection', {
+    detected_language: language,
+    confidence: confidence,
+    original_text: text.substring(0, 100)
+});
+
+// Esecuzione strumenti MCP
+await logAgentActivity('mcp', 'tool_execution', {
+    tool_name: selectedTool.name,
+    server_source: selectedTool.server_source,
+    execution_time: `${Date.now() - startTime}ms`,
+    success: true
+});
+```
+
+#### Dashboard LangSmith
+
+Dopo aver configurato LangSmith, accedi alla dashboard per vedere:
+
+1. **📊 Trace Completi**: Visualizza l'intero flusso di elaborazione
+2. **⚡ Performance Metrics**: Tempo di risposta per ogni agente
+3. **🎯 Success/Error Rates**: Tasso di successo routing e tool execution
+4. **💰 Token Usage**: Monitoraggio costi e utilizzo per agente
+5. **🌍 Language Analytics**: Pattern di utilizzo multilingue
+
+### Utilizzo per Debugging
+
+#### Scenario 1: Debugging Routing Problems
+
+Se l'orchestratore seleziona l'agente sbagliato:
+
+1. **Vai su LangSmith** → Il tuo progetto
+2. **Cerca trace** con tag `orchestrator` e `routing_decision`
+3. **Analizza il reasoning** del LLM per il routing
+4. **Identifica pattern** di routing incorretti
+5. **Ottimizza prompt** dell'orchestratore se necessario
+
+#### Scenario 2: Performance Analysis
+
+Per ottimizzare performance:
+
+1. **Filtra trace** per agente specifico
+2. **Analizza token usage** per identificare agenti costosi
+3. **Monitora latency** per identificare bottleneck
+4. **Confronta versioni** dopo ottimizzazioni
+
+#### Scenario 3: Multilingue Debugging
+
+Per problemi di traduzione o detection lingua:
+
+1. **Cerca trace** con tag `language` 
+2. **Verifica accuracy** detection lingua
+3. **Analizza qualità** traduzioni
+4. **Identifica lingue** problematiche
+
+### Configurazione Avanzata
+
+#### Custom Project Settings
+
+```javascript
+// src/utils/langsmithConfig.js
+const initializeLangSmith = () => {
+    if (process.env.LANGCHAIN_TRACING_V2 === 'true') {
+        process.env.LANGCHAIN_PROJECT = process.env.LANGCHAIN_PROJECT || 'MyLangGraphProgetto-NodeJS';
+        process.env.LANGCHAIN_ENDPOINT = process.env.LANGCHAIN_ENDPOINT || 'https://api.smith.langchain.com';
+        
+        console.log('✅ LangSmith initialized for project:', process.env.LANGCHAIN_PROJECT);
+        return true;
+    }
+    return false;
+};
+```
+
+#### Custom Tracking per Agent Personalizzati
+
+```javascript
+const { logAgentActivity } = require('./src/utils/langsmithConfig');
+
+// Nel tuo agente personalizzato
+async function myCustomAgent(input) {
+    const startTime = Date.now();
+    
+    try {
+        // La tua logica qui
+        const result = await processInput(input);
+        
+        // Log success
+        await logAgentActivity('my_custom_agent', 'processing', {
+            input_type: typeof input,
+            processing_time: `${Date.now() - startTime}ms`,
+            success: true,
+            output_length: result.length
+        });
+        
+        return result;
+    } catch (error) {
+        // Log errors
+        await logAgentActivity('my_custom_agent', 'error', {
+            error_type: error.name,
+            error_message: error.message,
+            processing_time: `${Date.now() - startTime}ms`,
+            success: false
+        });
+        throw error;
+    }
+}
+```
+
+### Sistema Resiliente
+
+**⚡ Caratteristica Importante**: Il sistema è progettato per essere **completamente resiliente**:
+
+- ✅ **Funziona perfettamente** anche SENZA LangSmith configurato
+- ✅ **Zero downtime** se LangSmith è temporaneamente non disponibile  
+- ✅ **Graceful degradation** - logging silently fails, sistema continua
+- ✅ **No breaking changes** - LangSmith è puramente additive
+
+```javascript
+// Il sistema gestisce automaticamente errori LangSmith
+try {
+    await logAgentActivity(/* ... */);
+} catch (error) {
+    // Errore LangSmith ignorato silenziosamente
+    // Il sistema continua normalmente
+}
+```
+
+### Best Practices
+
+#### 1. Organizzazione Projects
+
+- **Un progetto per ambiente**: `Dev-MyLangGraph`, `Prod-MyLangGraph`
+- **Progetti separati per features**: `MyLangGraph-Multilingual`, `MyLangGraph-MCP`
+
+#### 2. Tag Strategy
+
+Usa tag consistenti per facilitare filtering:
+
+```javascript
+await logAgentActivity('orchestrator', 'routing_decision', {
+    // Dati specifici
+}, {
+    environment: 'production',
+    version: '1.0.0',
+    user_session: sessionId
+});
+```
+
+#### 3. Performance Monitoring
+
+- **Monitor token usage** per evitare costi eccessivi
+- **Set up alerts** per error rates anomali
+- **Track latency trends** nel tempo
+
+#### 4. Privacy e Sicurezza
+
+- ⚠️ **Non loggare dati sensibili** nelle activity logs
+- ✅ **Usa abstractions** per dati utente privati
+- ✅ **Configura retention policies** appropriate
+
+### Troubleshooting LangSmith
+
+#### Problema: "LangSmith not tracking"
+
+```bash
+# Verifica configurazione
+echo $LANGCHAIN_TRACING_V2  # Deve essere "true"
+echo $LANGCHAIN_API_KEY     # Deve iniziare con "lsv2_"
+
+# Test connessione
+node test-langsmith.js
+```
+
+#### Problema: "Invalid API Key"
+
+1. Rigenera API key su LangSmith dashboard
+2. Verifica che inizi con `lsv2_`
+3. Controlla che non ci siano spazi extra nel `.env`
+
+#### Problema: "Project not found"
+
+1. Verifica nome progetto su LangSmith dashboard
+2. Il progetto viene creato automaticamente se non esiste
+3. Controlla permessi dell'API key
+
+### Risorse Aggiuntive
+
+- 📚 **[LangSmith Documentation](https://docs.smith.langchain.com/)**
+- 🎥 **[LangSmith Video Tutorials](https://www.youtube.com/playlist?list=PLfaIDFEXuae2LXbO1_PKyVJiQ23ZztA0x)**
+- 💬 **[LangSmith Discord Community](https://discord.gg/langchain)**
+
 ## 🐛 Troubleshooting
 
 ### Problemi Comuni
@@ -637,6 +895,12 @@ Vedi `MCP-MULTI-SERVER.md` per la documentazione completa.
 **L'orchestratore non seleziona lo strumento MCP corretto**
 - Le descrizioni degli strumenti potrebbero essere troppo generiche
 - Modifica `mcp_utils.py` per migliorare le descrizioni degli strumenti
+- Usa LangSmith per analizzare le decisioni di routing dell'orchestratore
+
+**Errore: "LangSmith tracing failed"**
+- LangSmith è completamente opzionale - il sistema continua a funzionare
+- Verifica `LANGCHAIN_API_KEY` nel file `.env` se vuoi usare LangSmith
+- Testa con: `node test-langsmith.js`
 
 ### Debug con LangSmith
 
@@ -660,9 +924,13 @@ Se hai configurato LangSmith, puoi monitorare l'esecuzione degli agenti:
 - [ ] Implementare caching persistente per conversation history
 - [ ] Aggiungere autenticazione e autorizzazione
 - [ ] Implementare rate limiting
-- [ ] Aggiungere metriche e monitoring
+- [x] ✅ **Integrazione LangSmith completa** - Monitoraggio e debugging avanzato
+- [x] ✅ **Sistema multilingue automatico** - Detection e traduzione seamless
+- [x] ✅ **Architettura modulare ottimizzata** - 4 agenti specializzati
 - [x] Creare frontend web per testing
 - [ ] Documentazione API con OpenAPI/Swagger
+- [ ] Implementare dashboard analytics personalizzata con metriche LangSmith
+- [ ] Aggiungere alerting automatico per performance degradation
 
 ## 📄 Licenza
 
@@ -673,4 +941,6 @@ Questo progetto è rilasciato sotto licenza MIT. Vedi il file `LICENSE` per i de
 Per supporto tecnico o domande:
 - Apri una issue su GitHub
 - Controlla la sezione [Troubleshooting](#-troubleshooting)
-- Verifica i log di LangSmith per errori dettagliati
+- Verifica i log di LangSmith per errori dettagliati (se configurato)
+- Testa con i file di esempio: `node test-multilingual.js`, `node test-langsmith.js`
+- Controlla la [documentazione LangSmith](#-integrazione-langsmith---monitoraggio-e-debugging) per debugging avanzato
