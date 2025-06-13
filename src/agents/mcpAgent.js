@@ -39,16 +39,17 @@ async function runMcpAgent(messages, selectedTool, userQuery, threadId) {
     logAgentActivity('mcp_agent', 'tool_executed', {
       toolName: selectedTool.name,
       dataReceived: true
-    });
-    
-    // 2. Use LLM to elaborate the response based on raw data and user query
+    });      // 2. Use LLM to elaborate the response based on raw data and user query
     const llmMessages = [
-      new HumanMessage(`You are a professional business assistant for Mauden. A user asked: "${userQuery}"
+      ...messages.slice(0, -1), // Include conversation history
+      new HumanMessage(`You are a professional business assistant for Mauden. The user asked: "${userQuery}"
 
 I obtained this data from the MCP tool "${selectedTool.name}":
 ${JSON.stringify(mcpData, null, 2)}
 
 Please provide a professional, comprehensive, and well-formatted response in English that answers the user's question using this data.
+
+${messages.length > 1 ? 'IMPORTANT: Consider the conversation history above. If the user is asking about someone mentioned earlier (like asking "do you know someone with this name in Mauden?" after mentioning a specific person), focus specifically on that person in your response and provide their details from the data.' : ''}
 
 Guidelines:
 - Use appropriate emojis and Markdown formatting
@@ -58,7 +59,8 @@ Guidelines:
 - If it's about interns, highlight the training program
 - For salary queries, provide detailed statistical analysis
 - Include suggestions for related questions when appropriate
-- Be concise but informative`)
+- Be concise but informative
+- ${messages.length > 1 ? 'When referencing conversation context, be specific about which person or topic was discussed earlier' : ''}`)
     ];
 
     const llmResponse = await llm.invoke(llmMessages);
@@ -138,24 +140,29 @@ RESPONSE (number only):`)
  * Check if a query should be handled by MCP Agent
  * @param {string} userQuery - User's query in English
  * @param {Array} mcpTools - Available MCP tools
+ * @param {Array} existingMessages - Conversation history
  * @returns {Promise<boolean>} - True if MCP agent should handle this query
  */
-async function shouldUseMcpAgent(userQuery, mcpTools) {
+async function shouldUseMcpAgent(userQuery, mcpTools, existingMessages = []) {
   console.log(`🔍 MCP Agent: Checking if query requires company data...`);
   
   if (!mcpTools || mcpTools.length === 0) {
     return false;
   }
-  
+
   try {
     const toolDescriptions = mcpTools.map(tool => 
       `Tool: ${tool.name}\nDescription: ${tool.description}`
     ).join('\n\n');
     
+    const conversationContext = existingMessages.length > 0 
+      ? `\n\nCONVERSATION HISTORY:\n${existingMessages.map(msg => `${msg._getType()}: ${msg.content}`).join('\n')}\n`
+      : '';
+    
     const checkMessages = [
       new HumanMessage(`You are an intelligent router for Mauden company queries. Determine if this user query requires accessing company-specific data through MCP tools.
 
-USER QUERY: "${userQuery}"
+USER QUERY: "${userQuery}"${conversationContext}
 
 AVAILABLE MCP TOOLS:
 ${toolDescriptions}
@@ -165,6 +172,9 @@ ANALYSIS:
 - Does it ask for company data, statistics, or internal information?
 - Does it ask about interns, salaries, roles, or staff?
 - Does it ask for model information or company-specific data?
+- ${existingMessages.length > 0 ? 'Based on the conversation history, is the user referring to someone mentioned earlier that might be found in company data?' : ''}
+
+IMPORTANT: If the conversation history shows the user asked about a specific person, and now they\'re asking "do you know someone with this name in Mauden/company", this DEFINITELY requires MCP tools to search company data.
 
 Respond with ONLY "true" if the query requires MCP tools, or "false" if it's a general question.`)
     ];

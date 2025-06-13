@@ -74,11 +74,9 @@ async function processEnglishQuery(englishQuery, threadId, existingMessages = []
     const { getAllMcpTools } = require('../utils/mcpUtils.commonjs.js');
     const mcpTools = await getAllMcpTools();
     console.log(`Loaded ${mcpTools.length} MCP tools with descriptions:`, 
-      mcpTools.map(t => `${t.name}: ${t.description}`).join(', '));
-
-    // 2. Intelligent routing using specialized agents
+      mcpTools.map(t => `${t.name}: ${t.description}`).join(', '));    // 2. Intelligent routing using specialized agents with conversation context
     console.log(`🚦 Orchestrator: Using intelligent agent routing...`);
-    const shouldUseMcp = await shouldUseMcpAgent(englishQuery, mcpTools);
+    const shouldUseMcp = await shouldUseMcpAgent(englishQuery, mcpTools, existingMessages);
     const selectedAgent = shouldUseMcp ? 'mcp_agent' : 'general_agent';
     console.log(`✅ Orchestrator: Selected ${selectedAgent} for query`);
 
