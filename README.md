@@ -166,6 +166,266 @@ docker build -t langgraph-mcp .
 docker run -p 8001:8001 --env-file .env langgraph-mcp
 ```
 
+## 👨‍💻 Guida per Sviluppatori
+
+### 🚀 Setup Completo per lo Sviluppo
+
+Questa sezione fornisce una guida dettagliata per sviluppatori che vogliono contribuire al progetto o utilizzarlo come base per i propri sviluppi.
+
+#### Primo Setup del Progetto
+
+1. **📥 Clona il repository**
+   ```bash
+   git clone https://github.com/fran67phil99/langChainTestMCP.git
+   cd langChainTestMCP
+   ```
+
+2. **🔐 Configura le variabili d'ambiente**
+   ```bash
+   # Copia il template di configurazione
+   cp .env.example .env
+   ```
+   
+   **⚠️ IMPORTANTE**: Edita il file `.env` e aggiungi le tue credenziali:
+   ```env
+   # Aggiungi la tua chiave API OpenAI (OBBLIGATORIA)
+   OPENAI_API_KEY="sk-proj-la-tua-chiave-openai-qui"
+   
+   # Optional: Aggiungi LangSmith per debugging
+   LANGCHAIN_API_KEY="your_langsmith_api_key_here"
+   LANGCHAIN_TRACING_V2="true"
+   LANGCHAIN_PROJECT="MyLangGraphProgetto-NodeJS"
+   ```
+
+3. **📦 Installa tutte le dipendenze**
+   ```bash
+   # Backend Node.js
+   npm install
+   
+   # Frontend Angular
+   cd langgraph-frontend
+   npm install
+   cd ..
+   
+   # Server MCP Python
+   pip install -r requirements.txt
+   ```
+
+#### Avvio dell'Ambiente di Sviluppo
+
+**🎯 Opzione A - Avvio Automatico (Consigliato)**
+```bash
+# Windows PowerShell
+.\start-all.ps1
+
+# Windows Command Prompt  
+start-all.bat
+```
+
+**🔧 Opzione B - Avvio Manuale (Per debugging)**
+```bash
+# Terminale 1: Server MCP Python
+python main_api.py
+
+# Terminale 2: Backend Node.js
+npm run dev
+
+# Terminale 3: Frontend Angular (opzionale)
+cd langgraph-frontend
+ng serve --open
+```
+
+#### Endpoint di Sviluppo
+
+Dopo l'avvio, avrai accesso a:
+- 🎨 **Frontend Angular**: http://localhost:4200
+- 🌐 **Backend Node.js**: http://localhost:8001
+- 🐍 **MCP Server Python**: http://localhost:8080
+- 📊 **Health Check**: http://localhost:8001/health
+
+### 🧪 Testing e Debugging
+
+#### Test Rapidi del Sistema
+
+```bash
+# Test sistema multilingua completo
+node test-multilingual.js
+
+# Test architettura modulare
+node test-modular.js
+
+# Demo sistema multi-server MCP
+node demo-multi-server.js
+```
+
+#### Test Componenti Individuali
+
+```bash
+# Test configurazione MCP
+node mcp-config-cli.js list
+node mcp-config-cli.js test --all
+
+# Test con curl
+curl -X GET "http://localhost:8001/health"
+curl -X GET "http://localhost:8080/tools"
+```
+
+### 🏗️ Architettura per Sviluppatori
+
+#### Agenti Modulari
+
+Il sistema è organizzato in **4 agenti specializzati**:
+
+1. **`orchestratorAgent.optimized.js`** - Router intelligente (80% riduzione codice)
+2. **`languageAgent.js`** - Gestione multilingua automatica  
+3. **`mcpAgent.js`** - Specialista dati aziendali
+4. **`generalAgent.js`** - Conoscenza generale
+
+#### Flusso di Elaborazione
+
+```
+Input Utente (qualsiasi lingua)
+    ↓
+🌍 Language Agent → Rilevamento lingua + Traduzione → Inglese
+    ↓  
+🧠 Orchestrator Agent → Routing LLM-powered → Selezione agente
+    ↓
+🔧 Specialized Agent → Elaborazione specifica
+    ↓
+🌍 Language Agent → Traduzione risposta → Lingua originale
+    ↓
+Output Utente (lingua nativa)
+```
+
+### 🔧 Configurazione Multi-Server MCP
+
+#### Gestione Server via CLI
+
+```bash
+# Lista server configurati
+node mcp-config-cli.js list
+
+# Aggiungi nuovo server
+node mcp-config-cli.js add --id my_server --name "My Server" --url "http://localhost:8082"
+
+# Abilita/disabilita server
+node mcp-config-cli.js toggle --id my_server
+
+# Test connettività
+node mcp-config-cli.js test --id my_server
+```
+
+#### Configurazione Personalizzata
+
+Modifica `mcp_servers.json` per configurazioni avanzate:
+
+```json
+{
+  "servers": [
+    {
+      "id": "custom_server",
+      "name": "Custom MCP Server",
+      "url": "http://localhost:8082", 
+      "tools_endpoint": "/api/v1/tools",
+      "enabled": true,
+      "timeout": 15000,
+      "retry_attempts": 5,
+      "priority": 1
+    }
+  ],
+  "discovery": {
+    "max_concurrent_discoveries": 5,
+    "cache_ttl_minutes": 10
+  }
+}
+```
+
+### 🔒 Best Practice di Sicurezza
+
+#### Gestione Chiavi API
+
+- ✅ **File `.env` è ignorato da Git** - le tue chiavi rimangono locali
+- ✅ **Template `.env.example`** - condiviso nel repository senza chiavi
+- ✅ **Non committare mai chiavi API** - il sistema previene leak accidentali
+
+#### Workflow Sicuro
+
+```bash
+# 1. Le tue modifiche al .env rimangono locali
+echo "OPENAI_API_KEY=sk-..." >> .env
+
+# 2. Git non traccia il file .env
+git status  # .env non appare nelle modifiche
+
+# 3. Solo .env.example è versionato
+git add .env.example  # Template sicuro
+```
+
+### 📚 Documentazione Aggiuntiva
+
+- **`README-MULTILINGUAL.md`** - Sistema multilingua dettagliato
+- **`MCP-MULTI-SERVER.md`** - Configurazione avanzata multi-server
+- **`/src/agents/`** - Documentazione inline negli agenti
+- **`/test-*.js`** - Esempi pratici di utilizzo
+
+### 🤝 Contribuzioni
+
+#### Workflow di Sviluppo
+
+```bash
+# 1. Crea un branch per la tua feature
+git checkout -b feature/nome-feature
+
+# 2. Sviluppa e testa
+npm test
+node test-multilingual.js
+
+# 3. Commit e push
+git add .
+git commit -m "feat: descrizione feature"
+git push origin feature/nome-feature
+
+# 4. Apri una Pull Request
+```
+
+#### Linee Guida
+
+- 🧪 **Aggiungi test** per nuove funzionalità
+- 📝 **Documenta** le modifiche all'architettura
+- 🌍 **Testa il sistema multilingua** se tocchi gli agenti
+- 🔧 **Verifica la compatibilità MCP** se modifichi mcpUtils
+
+### 🆘 Risoluzione Problemi Sviluppatori
+
+#### Problemi Comuni
+
+**❌ "OPENAI_API_KEY not configured"**
+```bash
+# Soluzione: Verifica il file .env
+cat .env | grep OPENAI_API_KEY
+# Deve contenere: OPENAI_API_KEY="sk-proj-..."
+```
+
+**❌ "MCP server connection failed"**  
+```bash
+# Soluzione: Verifica che il server Python sia attivo
+curl http://localhost:8080/tools
+# Oppure riavvia: python main_api.py
+```
+
+**❌ "Error: 401 Unauthorized"**
+```bash
+# Soluzione: Chiave API non valida o scaduta
+# Genera una nuova chiave su: https://platform.openai.com/api-keys
+```
+
+**❌ "No tools discovered from any server"**
+```bash
+# Soluzione: Testa la configurazione MCP
+node mcp-config-cli.js test --all
+node demo-multi-server.js
+```
+
 ## 🎯 Utilizzo
 
 ### WebSocket API
