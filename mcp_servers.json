@@ -41,6 +41,13 @@
     {
       "enabled": false,
       "timeout": 30000,
+      "name": "Azure MCP Server",
+      "command": "npx",
+      "args": [ "-y", "@azure/mcp@latest", "server", "start" ]
+    },
+    {
+      "enabled": false,
+      "timeout": 30000,
       "retry_attempts": 3,
       "priority": 4,
       "tools_endpoint": "/api/mcp/tools",

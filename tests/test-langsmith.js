@@ -3,7 +3,7 @@
 
 console.log('🔄 Starting LangSmith test...');
 
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
 
 async function testLangSmithIntegration() {
   console.log('🔍 Testing LangSmith Integration');

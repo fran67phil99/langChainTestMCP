@@ -3,7 +3,7 @@
 
 console.log('🧪 Starting Complex Conversation History Tests...');
 
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
 
 // Simulate a complex conversation with multiple context switches
 async function testComplexConversationFlow() {

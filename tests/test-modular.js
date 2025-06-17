@@ -1,5 +1,5 @@
 // Test script for modular agent architecture
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
 require('dotenv').config();
 
 async function testModularArchitecture() {

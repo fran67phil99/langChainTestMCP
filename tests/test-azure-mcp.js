@@ -4,7 +4,7 @@
  */
 
 const axios = require('axios');
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
 
 // Configurazione per i test Azure
 const AZURE_TEST_CONFIG = {

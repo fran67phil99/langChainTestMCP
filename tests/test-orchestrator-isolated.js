@@ -1,6 +1,6 @@
 // Test dell'orchestratore isolato
 require('dotenv').config();
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized.js');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized.js');
 
 async function testOrchestrator() {
   try {

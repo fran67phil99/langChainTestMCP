@@ -1,0 +1,197 @@
+<div class="mcp-header">
+  <div class="mcp-icon">L</div>  <div class="mcp-info">
+    <h3 class="mcp-title">Mauden MCP System</h3>
+    <p class="mcp-subtitle">Gestione Server Model Context Protocol</p>
+  </div>
+</div>
+
+<div class="mcp-manager">  <!-- Bottone Aggiungi Nuovo Server -->
+  <button (click)="addNewServer()" class="btn-add" *ngIf="!showForm">
+    Aggiungi Nuovo Server MCP
+  </button>
+  
+  <!-- Lista Server Esistenti -->
+  <div class="server-list">
+    <div *ngFor="let server of servers; trackBy: trackByServerId" 
+         class="server-card" [class.disabled]="!server.enabled">
+      
+      <div class="server-header">
+        <h3 class="server-name">{{ server.name }}</h3>
+        <div class="server-controls">
+          <button (click)="toggleServer(server)" 
+                  [class]="server.enabled ? 'btn-disable' : 'btn-enable'"
+                  [title]="server.enabled ? 'Disabilita server' : 'Abilita server'">
+            {{ server.enabled ? 'Disabilita' : 'Abilita' }}
+          </button>
+          <button (click)="editServer(server)" class="btn-edit" title="Modifica server">
+            Modifica
+          </button>
+          <button (click)="deleteServer(server.id)" class="btn-delete" title="Elimina server">
+            Elimina
+          </button>
+        </div>
+      </div>
+      
+      <div class="server-info">
+        <span class="server-type">
+          {{ server.type === 'http' ? '🌐 HTTP Server' : '⚡ Command Server' }}
+        </span>
+        
+        <div class="server-path" *ngIf="server.url">
+          <strong>URL:</strong> {{ server.url }}
+        </div>
+        <div class="server-path" *ngIf="server.command">
+          <strong>Command:</strong> {{ server.command }} {{ server.args?.join(' ') }}
+        </div>
+        <div class="server-path">
+          <strong>Timeout:</strong> {{ server.timeout }}ms
+        </div>
+        <div *ngIf="server.description" style="margin-top: 8px; color: #86868b; font-size: 14px;">
+          {{ server.description }}
+        </div>
+        
+        <div class="patterns" *ngIf="server.quick_route_patterns.length > 0" style="margin-top: 12px;">
+          <div style="font-size: 13px; color: #86868b; margin-bottom: 6px;">
+            <strong>Pattern di Routing Rapido:</strong>
+          </div>
+          <span *ngFor="let pattern of server.quick_route_patterns" class="pattern-tag">
+            {{ pattern }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+    <!-- Form Aggiunta/Modifica Server -->
+  <div class="server-form" *ngIf="showForm">
+    <h3 class="form-title">{{ editingServer ? '✏️ Modifica Server' : '➕ Aggiungi Nuovo Server' }}</h3>
+    
+    <form (ngSubmit)="saveServer()">
+      <div class="form-group">
+        <label>Nome Server:</label>
+        <input [(ngModel)]="currentServer.name" 
+               name="name" 
+               required 
+               placeholder="es. Azure MCP Server"
+               autocomplete="off">
+      </div>
+      
+      <div class="form-group">
+        <label>Tipo Server:</label>        <select [(ngModel)]="currentServer.type" 
+                name="type" 
+                (change)="onServerTypeChange()">
+          <option value="http">HTTP Server</option>
+          <option value="command">Command Server</option>
+        </select>
+      </div>      
+      <!-- HTTP Server Fields -->
+      <div *ngIf="currentServer.type === 'http'" class="http-fields">        <div class="form-group">
+          <label>URL del Server:</label>
+          <input [(ngModel)]="currentServer.url" 
+                 name="url" 
+                 placeholder="http://localhost:8080"
+                 autocomplete="off">
+        </div>
+        
+        <div class="form-group">
+          <label>Tools Endpoint:</label>
+          <input [(ngModel)]="currentServer.tools_endpoint" 
+                 name="tools_endpoint" 
+                 placeholder="/tools"
+                 autocomplete="off">
+        </div>
+      </div>
+      
+      <!-- Command Server Fields -->
+      <div *ngIf="currentServer.type === 'command'" class="command-fields">
+        <div class="form-group">
+          <label>Comando da Eseguire:</label>
+          <input [(ngModel)]="currentServer.command" 
+                 name="command" 
+                 placeholder="npx"
+                 autocomplete="off">
+        </div>
+        
+        <div class="form-group">
+          <label>📋 Argomenti (uno per riga):</label>
+          <textarea [(ngModel)]="argsText" 
+                    name="args" 
+                    rows="4"
+                    placeholder="-y&#10;@azure/mcp@latest&#10;server&#10;start"></textarea>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>⏱️ Timeout (ms):</label>
+        <input type="number" 
+               [(ngModel)]="currentServer.timeout" 
+               name="timeout" 
+               value="10000"
+               min="1000"
+               max="60000"
+               step="1000">
+      </div>
+      
+      <div class="form-group">
+        <label>📝 Descrizione:</label>
+        <textarea [(ngModel)]="currentServer.description" 
+                  name="description" 
+                  rows="3"
+                  placeholder="Descrizione del server MCP e delle sue funzionalità"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label>🚀 Pattern di Routing Rapido (uno per riga):</label>
+        <textarea [(ngModel)]="patternsText" 
+                  name="patterns" 
+                  rows="3"
+                  placeholder="\\b(azure|blob|storage)\\b&#10;\\b(database|sql|query)\\b&#10;\\b(email|notification)\\b"></textarea>
+        <small style="color: #86868b; font-size: 12px; margin-top: 4px; display: block;">
+          Pattern regex per routing rapido senza chiamate LLM costose
+        </small>
+      </div>
+      
+      <div class="form-group checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="currentServer.enabled" name="enabled" class="checkbox-input">
+          <span class="checkbox-text">✅ Abilita Server Immediatamente</span>
+        </label>
+      </div>      
+      <div class="form-actions">
+        <button type="submit" class="btn-save">
+          {{ editingServer ? '💾 Salva Modifiche' : '✨ Crea Server' }}
+        </button>
+        <button type="button" (click)="cancelEdit()" class="btn-cancel">
+          🚫 Annulla
+        </button>
+      </div>
+    </form>
+  </div>
+  
+  <!-- Test Connection Section -->
+  <div class="test-section">
+    <div class="test-header">
+      <h3>🧪 Test Connessioni Server</h3>
+      <p>Verifica la connettività e il funzionamento dei server MCP configurati</p>
+    </div>
+    
+    <button (click)="testAllServers()" class="btn-test" [disabled]="servers.length === 0">
+      🔄 Testa Tutti i Server ({{ servers.length }})
+    </button>
+    
+    <div *ngIf="testResults.length > 0" class="test-results">
+      <div *ngFor="let result of testResults" 
+           class="test-result" [class]="result.success ? 'success' : 'error'">
+        <div class="test-server-name">{{ result.serverName }}</div>
+        <div class="test-message">
+          {{ result.success ? 'Connesso correttamente' : result.error }}
+        </div>
+      </div>
+    </div>
+    
+    <div *ngIf="servers.length === 0" class="empty-state">
+      <div class="empty-icon">📭</div>
+      <h4>Nessun server configurato</h4>
+      <p>Aggiungi il tuo primo server MCP per iniziare</p>
+    </div>
+  </div>
+</div>

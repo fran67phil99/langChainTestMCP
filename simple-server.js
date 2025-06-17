@@ -15,6 +15,9 @@ console.log('📁 Loading orchestrator from: ./src/agents/orchestratorAgent.opti
 const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized.js');
 console.log('✅ Optimized Orchestrator loaded successfully');
 
+// Import MCP management routes
+const mcpRoutes = require('./src/routes/mcpRoutes');
+
 const app = express();
 const server = createServer(app);
 
@@ -33,6 +36,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// MCP management routes
+app.use('/api/mcp', mcpRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

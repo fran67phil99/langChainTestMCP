@@ -1,1 +1,14 @@
-<app-chat></app-chat>
+<nav class="navbar">  <div class="nav-container">
+    <div class="nav-brand">
+      <h1>Mauden MCP System</h1>
+    </div>
+    <div class="nav-links">
+      <a routerLink="/chat" routerLinkActive="active">Chat</a>
+      <a routerLink="/mcp-manager" routerLinkActive="active">MCP Manager</a>
+    </div>
+  </div>
+</nav>
+
+<main class="main-content">
+  <router-outlet></router-outlet>
+</main>

@@ -1,17 +1,24 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
-import { FormsModule } from '@angular/forms'; // Import FormsModule
+import { FormsModule } from '@angular/forms';
+import { HttpClientModule } from '@angular/common/http';
 
+import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { ChatComponent } from './chat/chat.component';
+import { McpManagerComponent } from './mcp-manager/mcp-manager.component';
 
 @NgModule({
   declarations: [
     AppComponent,
-    ChatComponent
-  ],  imports: [
+    ChatComponent,
+    McpManagerComponent
+  ],
+  imports: [
     BrowserModule,
-    FormsModule // Add FormsModule here
+    AppRoutingModule,
+    FormsModule,
+    HttpClientModule
   ],
   providers: [],
   bootstrap: [AppComponent]

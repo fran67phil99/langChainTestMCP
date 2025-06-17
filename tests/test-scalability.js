@@ -3,7 +3,7 @@
  * Testa prestazioni, memoria, e scalabilità con multiple query simultanee
  */
 
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
 const axios = require('axios');
 
 // Configurazione test di carico

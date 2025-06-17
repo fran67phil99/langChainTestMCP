@@ -1,7 +1,7 @@
 // Quick Complex Conversation Test
 console.log('🧪 Quick Complex Conversation Test');
 
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
 
 async function quickComplexTest() {
   try {

@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "Azure MCP Server": {
+      "command": "npx",
+      "args": ["-y", "@azure/mcp@latest", "server", "start"],
+      "enabled": true,
+      "timeout": 30000,
+      "quick_route_patterns": [
+        "\\b(azure|cloud|storage|functions)\\b"
+      ]
+    },
+    "Weather MCP Server": {
+      "command": "node",
+      "args": ["weather-server.js"],
+      "enabled": false,
+      "timeout": 10000,
+      "quick_route_patterns": [
+        "\\b(weather|meteo|temperatura|clima)\\b"
+      ]
+    }
+  },
+  "httpServers": [
+    {
+      "id": "mauden_server",
+      "name": "Mauden MCP Server",
+      "url": "http://localhost:8080",
+      "tools_endpoint": "/tools",
+      "description": "Server MCP principale per tools Mauden",
+      "enabled": true,
+      "timeout": 10000,
+      "retry_attempts": 3,
+      "priority": 1,
+      "quick_route_patterns": [
+        "\\b(stagist[ie]|intern|dipendent[ie]|employee|mauden|aziend|company|dataset|dati|csv)\\b",
+        "\\b(lista|elenco|informazioni|dettagli)\\s+(stagist|dipendent|employee)\\b",
+        "\\b(quant[ie]|numero|count)\\s+(stagist|dipendent)\\b"
+      ]
+    }
+  ],
+  "discovery": {
+    "enabled": true,
+    "timeout_per_server": 10000,
+    "max_concurrent_discoveries": 3,
+    "cache_ttl_minutes": 5,
+    "fallback_to_mock": true
+  }
+}

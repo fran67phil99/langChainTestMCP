@@ -20,24 +20,17 @@ function quickRouteAgent(userInput) {
   const query = userInput.toLowerCase();
   
   // Carica pattern dinamici dalla configurazione MCP
-  const { mcpConfigManager } = require('../utils/mcpConfig');
-  const config = mcpConfigManager.loadConfig();
-  const enabledServers = config.servers.filter(s => s.enabled);
-  
-  // Raccogli tutti i pattern dai server abilitati
-  const mcpPatterns = [];
-  enabledServers.forEach(server => {
-    if (server.quick_route_patterns) {
-      server.quick_route_patterns.forEach(pattern => {
-        mcpPatterns.push(new RegExp(pattern, 'i'));
-      });
-    }
-  });
+  const { McpFormatConverter } = require('../utils/mcpFormatConverter');
+  const converter = new McpFormatConverter();
+  const config = converter.loadUnifiedConfig();
+  const patterns = converter.getAllQuickRoutePatterns(config);
   
   // Se matcha pattern di qualsiasi server MCP, vai diretto a MCP
-  if (mcpPatterns.length > 0 && mcpPatterns.some(pattern => pattern.test(query))) {
-    console.log('🎯 Quick Route: MCP Agent (pattern dinamico rilevato)');
-    return 'mcp';
+  for (const patternInfo of patterns) {
+    if (patternInfo.pattern.test(query)) {
+      console.log(`🎯 Quick Route: MCP Agent (pattern ${patternInfo.serverName} rilevato)`);
+      return 'mcp';
+    }
   }
   
   // Pattern per query generiche

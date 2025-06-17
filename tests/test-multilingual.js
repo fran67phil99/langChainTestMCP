@@ -1,5 +1,5 @@
 // Test script for multilingual system
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
 require('dotenv').config();
 
 async function testMultilingualSystem() {

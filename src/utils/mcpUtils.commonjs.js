@@ -1,29 +1,31 @@
 const axios = require('axios');
-const { mcpConfigManager } = require('./mcpConfig');
+const { McpFormatConverter } = require('./mcpFormatConverter');
 
 /**
  * Fetches available MCP tool definitions from configured servers
  */
 async function getAllMcpTools() {
-  // Carica la configurazione
-  const config = mcpConfigManager.loadConfig();
+  // Carica la configurazione con supporto formato ibrido
+  const converter = new McpFormatConverter();
+  const config = converter.loadUnifiedConfig();
   
-  if (!mcpConfigManager.isDiscoveryEnabled()) {
+  if (!config.discovery.enabled) {
     console.log('🔒 MCP tool discovery is disabled via configuration.');
-    return mcpConfigManager.getCustomTools();
+    return config.tools_override.custom_tools || [];
   }
 
-  const enabledServers = mcpConfigManager.getEnabledServers();
+  const enabledServers = config.servers.filter(s => s.enabled);
   if (enabledServers.length === 0) {
     console.warn('⚠️ No enabled MCP servers found in configuration.');
     return getFallbackTools();
   }
 
   console.log(`🔍 Starting discovery from ${enabledServers.length} MCP servers...`);
+  console.log(`📋 Using ${config.servers.find(s => s.type === 'command') ? 'Standard MCP' : 'HTTP'} format servers`);
   
   const allTools = [];
   const discoveryPromises = [];
-  const discoveryConfig = mcpConfigManager.getDiscoveryConfig();
+  const discoveryConfig = config.discovery;
 
   // Limita il numero di discovery concorrenti
   const semaphore = new Semaphore(discoveryConfig.max_concurrent_discoveries);
