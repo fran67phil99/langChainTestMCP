@@ -39,6 +39,7 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
   newMessage: string = '';
   isConnected: boolean = false;
   isTyping: boolean = false;
+  private hasConnectedOnce: boolean = false; // Flag per tracciare la prima connessione
     // Global progress tracking for current processing
   currentProcessingMessageId: string | null = null;
   
@@ -78,9 +79,15 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
     this.websocketService.getConnectionStatus().subscribe(isConnected => {
       this.isConnected = isConnected;
       if (isConnected) {
-        this.addMessage('Ciao! Sono il tuo assistente AI. Come posso aiutarti oggi?', false);
+        if (!this.hasConnectedOnce) {
+          this.hasConnectedOnce = true;
+          this.addMessage('Ciao! Sono il tuo assistente AI. Come posso aiutarti oggi?', false);
+        }
       } else {
-        this.addMessage('Connessione persa. Tentativo di riconnessione...', false);
+        // Mostra il messaggio di riconnessione solo se ci si era già connessi prima
+        if (this.hasConnectedOnce) {
+          this.addMessage('Connessione persa. Tentativo di riconnessione...', false);
+        }
       }
     });
 
