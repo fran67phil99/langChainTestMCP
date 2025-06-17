@@ -39,26 +39,15 @@ export class McpManagerComponent implements OnInit {
   trackByServerId(index: number, server: McpServer): string {
     return server.id;
   }
-
   async loadServers() {
     try {
       this.servers = await this.http.get<McpServer[]>('/api/mcp/servers').toPromise() || [];
       console.log('📋 Loaded servers:', this.servers);
     } catch (error) {
       console.error('Errore caricamento server:', error);
-      // Mock data per sviluppo
-      this.servers = [
-        {
-          id: 'mauden_server',
-          name: 'Mauden MCP Server',
-          type: 'http',
-          url: 'http://localhost:8080',
-          enabled: true,
-          timeout: 10000,
-          quick_route_patterns: ['\\\\b(stagisti|dipendenti|mauden)\\\\b'],
-          description: 'Server MCP principale per tools Mauden'
-        }
-      ];
+      // Mostra errore invece di dati mock
+      this.servers = [];
+      alert('Errore nel caricamento dei server MCP. Assicurati che il server Node.js sia avviato sulla porta 8001.');
     }
   }
 

@@ -2,7 +2,12 @@
   "mcpServers": {
     "Azure MCP Server": {
       "command": "npx",
-      "args": ["-y", "@azure/mcp@latest", "server", "start"],
+      "args": [
+        "-y",
+        "@azure/mcp@latest",
+        "server",
+        "start"
+      ],
       "enabled": true,
       "timeout": 30000,
       "quick_route_patterns": [
@@ -11,7 +16,9 @@
     },
     "Weather MCP Server": {
       "command": "node",
-      "args": ["weather-server.js"],
+      "args": [
+        "weather-server.js"
+      ],
       "enabled": false,
       "timeout": 10000,
       "quick_route_patterns": [
