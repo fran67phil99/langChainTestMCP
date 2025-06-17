@@ -40,9 +40,14 @@ async function getAllMcpTools() {
       })
     );
   }
-
   try {
-    const results = await Promise.allSettled(discoveryPromises);
+    // Aggiungi timeout globale per tutto il discovery (max 10 secondi)
+    const globalTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Global discovery timeout')), 10000)
+    );
+    
+    const discoveryResults = Promise.allSettled(discoveryPromises);
+    const results = await Promise.race([discoveryResults, globalTimeout]);
     
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
@@ -90,7 +95,7 @@ async function discoverToolsFromServer(serverConfig) {
   }
 
   const toolsUrl = `${serverConfig.url}${serverConfig.tools_endpoint}`;
-  const timeout = serverConfig.timeout || 10000;
+  const timeout = serverConfig.timeout || 3000; // Ridotto da 10s a 3s
   const retryAttempts = serverConfig.retry_attempts || 3;
   
   console.log(`🔍 ${serverConfig.name}: Discovering tools from ${toolsUrl}`);
@@ -165,7 +170,7 @@ function createToolFromSchema(schema, serverConfig) {
         console.log(`🔧 ${schema.name} (${serverConfig.name}): Calling ${schema.method} ${url}`);
 
         const config = {
-          timeout: serverConfig.timeout || 10000,
+          timeout: serverConfig.timeout || 3000, // Ridotto da 10s a 3s
           headers: {
             'Accept': 'application/json',
             'User-Agent': 'MCP-Tool-Client/1.0'

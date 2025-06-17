@@ -116,6 +116,18 @@ function addToConversationHistory(threadId, messageType, content) {
   console.log(`💾 Conversation history for ${threadId}: ${history.length} messages`);
 }
 
+// Function to emit progress events to client
+function emitProgress(socket, threadId, step, details = {}) {
+  const progressEvent = {
+    threadId,
+    step,
+    timestamp: new Date().toISOString(),
+    ...details
+  };
+  socket.emit('processing_progress', progressEvent);
+  console.log(`📡 Progress emitted: ${step}`, details);
+}
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log(`🔌 Client connected: ${socket.id}`);
@@ -123,12 +135,17 @@ io.on('connection', (socket) => {
   // Add debugging for all socket events
   socket.onAny((eventName, ...args) => {
     console.log(`🔍 Socket event received: ${eventName}`, args);
-  });
-  socket.on('user_message', async (data) => {
+  });  socket.on('user_message', async (data) => {
     try {
       console.log(`📨 Socket: Raw data received:`, data);
       const { message, threadId } = data;
       console.log(`📨 Socket: Received message from ${socket.id}: "${message}"`);
+      
+      // Emit initial progress
+      emitProgress(socket, threadId, 'received', { 
+        message: 'Messaggio ricevuto, avvio elaborazione...',
+        userQuery: message 
+      });
       
       // Add user message to conversation history
       addToConversationHistory(threadId, 'human', message);
@@ -136,6 +153,11 @@ io.on('connection', (socket) => {
       // Get conversation history
       const conversationHistory = getConversationHistory(threadId);
       console.log(`📜 Loading conversation history for ${threadId}: ${conversationHistory.length} messages`);
+      
+      // Emit language detection progress
+      emitProgress(socket, threadId, 'language_detection', { 
+        message: 'Rilevamento lingua in corso...' 
+      });
       
       // Convert history to LangChain message format
       const existingMessages = conversationHistory.map(msg => {
@@ -151,10 +173,61 @@ io.on('connection', (socket) => {
       socket.emit('message_received', { 
         message: `Messaggio ricevuto: "${message}"`,
         timestamp: new Date().toISOString()
-      });      // Run orchestrator with conversation history
+      });      // Emit orchestrator start progress
+      emitProgress(socket, threadId, 'orchestrator_start', { 
+        message: 'Avvio orchestratore intelligente...' 
+      });
+      
+      // Add a small delay to make progress visible
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Emit language processing step
+      emitProgress(socket, threadId, 'language_processing', { 
+        message: 'Analisi linguistica del messaggio...' 
+      });
+      
+      // Add another small delay
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Emit agent selection step
+      emitProgress(socket, threadId, 'agent_routing', { 
+        message: 'Selezione agente specializzato...' 
+      });
+      
+      // Run orchestrator with conversation history
       console.log(`🚀 Starting orchestrator for message: "${message}" with ${existingMessages.length} previous messages`);
       const result = await runOrchestratorOptimized(message, threadId, existingMessages);
       console.log(`✅ Orchestrator completed, result:`, result);
+      
+      // Emit agent selection progress
+      const selectedAgent = result.selectedAgent || 'unknown';
+      const agentNames = {
+        'mcp_agent': 'Agente MCP (Dati Aziendali)',
+        'general_agent': 'Agente Generale',
+        'language_agent': 'Agente Linguistico'
+      };
+      
+      emitProgress(socket, threadId, 'agent_selected', { 
+        message: `Agente selezionato: ${agentNames[selectedAgent] || selectedAgent}`,
+        agent: selectedAgent
+      });
+      
+      // Add delay to show agent execution
+      await new Promise(resolve => setTimeout(resolve, 400));
+      
+      // Emit processing step
+      emitProgress(socket, threadId, 'agent_executing', { 
+        message: 'Elaborazione richiesta in corso...',
+        agent: selectedAgent
+      });
+      
+      // Add another delay for processing visualization
+      await new Promise(resolve => setTimeout(resolve, 600));
+      
+      // Emit completion progress
+      emitProgress(socket, threadId, 'processing_complete', { 
+        message: 'Elaborazione completata!'
+      });
       
       // Add AI response to conversation history
       const aiResponse = result.finalAnswer || result.finalResponse || result.messages?.[result.messages.length - 1]?.content || 'Nessuna risposta disponibile';

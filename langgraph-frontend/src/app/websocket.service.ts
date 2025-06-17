@@ -8,12 +8,22 @@ interface ChatMessage {
   error?: string;
 }
 
+interface ProgressEvent {
+  threadId: string;
+  step: string;
+  message: string;
+  timestamp: string;
+  agent?: string;
+  userQuery?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class WebsocketService {
   private socket!: Socket;
   private messageSubject: Subject<ChatMessage> = new Subject<ChatMessage>();
+  private progressSubject: Subject<ProgressEvent> = new Subject<ProgressEvent>();
   private connectionStatus: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
   private threadId: string = '';
 
@@ -40,11 +50,14 @@ export class WebsocketService {
     this.socket.on('system_message', (data: ChatMessage) => {
       console.log('System message received:', data);
       this.messageSubject.next({ message: data.message });
-    });
-
-    this.socket.on('agent_response', (data: ChatMessage) => {
+    });    this.socket.on('agent_response', (data: ChatMessage) => {
       console.log('Agent response received:', data);
       this.messageSubject.next({ response: data.response });
+    });
+
+    this.socket.on('processing_progress', (data: ProgressEvent) => {
+      console.log('Progress update received:', data);
+      this.progressSubject.next(data);
     });
 
     this.socket.on('error_message', (data: ChatMessage) => {
@@ -77,9 +90,12 @@ export class WebsocketService {
   public getMessages(): Observable<ChatMessage> {
     return this.messageSubject.asObservable();
   }
-
   public getConnectionStatus(): Observable<boolean> {
     return this.connectionStatus.asObservable();
+  }
+
+  public getProgressEvents(): Observable<ProgressEvent> {
+    return this.progressSubject.asObservable();
   }
 
   public disconnect(): void {

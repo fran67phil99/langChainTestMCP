@@ -26,7 +26,8 @@ if (!(Test-Path "node_modules")) {
 if (!(Test-Path "langgraph-frontend/node_modules")) {
     Write-Host "📦 Installando dipendenze Angular..." -ForegroundColor Yellow
     Set-Location "langgraph-frontend"
-    npm install    Set-Location ".."
+    npm install
+    Set-Location ".."
 }
 
 # Compila TypeScript
@@ -45,7 +46,7 @@ Start-Sleep -Seconds 2
 
 # Avvia il server Node.js (porta 8001)
 Write-Host "🌐 Avviando server Node.js su porta 8001..." -ForegroundColor Blue
-Start-Process -FilePath "node" -ArgumentList "dist/server.js" -WindowStyle Normal
+Start-Process -FilePath "node" -ArgumentList "simple-server.js" -WindowStyle Normal
 
 # Attendi 2 secondi per permettere al server Node.js di avviarsi
 Start-Sleep -Seconds 2

@@ -1,5 +1,4 @@
-<div class="chat-container">
-  <!-- Header della Chat -->
+<div class="chat-container">  <!-- Header della Chat -->
   <div class="chat-header">
     <div class="agent-avatar">AI</div>
     <div class="agent-info">
@@ -17,25 +16,56 @@
     <div *ngFor="let message of messages" 
          class="message-bubble"
          [class.user]="message.isUser"
-         [class.agent]="!message.isUser">
+         [class.agent]="!message.isUser"
+         [class.processing]="message.isProcessing">
       
       <div class="message-avatar">
         {{ message.isUser ? 'U' : 'AI' }}
       </div>
-      
-      <div class="message-content">
-        <!-- Contenuto per messaggi utente (solo testo) -->
+        <div class="message-content" [class.processing]="!message.isUser && message.isProcessing">
+        <!-- Per messaggi utente -->
         <div *ngIf="message.isUser" class="message-text">
           {{ message.content }}
         </div>
         
-        <!-- Contenuto per messaggi agente (con markdown) -->
-        <div *ngIf="!message.isUser" 
-             class="message-text" 
-             [innerHTML]="message.htmlContent">
+        <!-- Per messaggi AI in elaborazione -->
+        <div *ngIf="!message.isUser && message.isProcessing" class="message-processing">
+          <div class="processing-content message-text processing" [innerHTML]="message.htmlContent"></div>
+          
+          <!-- Progress bar durante elaborazione -->
+          <div class="processing-progress" *ngIf="message.progressPercentage">
+            <div class="progress-bar">
+              <div class="progress-fill" [style.width.%]="message.progressPercentage"></div>
+            </div>
+          </div>
         </div>
         
-        <div class="message-timestamp">
+        <!-- Per messaggi AI completati -->
+        <div *ngIf="!message.isUser && !message.isProcessing" class="message-completed">
+          <!-- Sezione processo elaborativo (se ci sono log) -->
+          <div *ngIf="message.progressLogs && message.progressLogs.length > 0" 
+               class="process-section">
+            <div class="process-header" (click)="toggleProcessLogs(message)">
+              <span class="process-title">{{ getProcessTitle(message.processLanguage) }}</span>
+              <span class="process-toggle" [class.expanded]="message.showProcessLogs">▼</span>
+            </div>            <!-- Log dettagliato (espandibile) -->
+            <div class="process-logs" [class.expanded]="message.showProcessLogs" *ngIf="message.progressLogs && message.progressLogs.length > 0">
+              <div *ngFor="let log of message.progressLogs" class="process-log-entry">
+                <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
+                <span class="log-step">{{ getLogStepName(log.step) }}</span>
+                <span class="log-message">{{ log.message }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Contenuto principale della risposta -->
+          <div class="message-response">
+            <div class="message-text" [innerHTML]="message.htmlContent"></div>
+          </div>
+        </div>
+        
+        <!-- Timestamp (solo per messaggi non in elaborazione) -->
+        <div *ngIf="!message.isProcessing" class="message-timestamp">
           {{ formatTime(message.timestamp) }}
         </div>
       </div>

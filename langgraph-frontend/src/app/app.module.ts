@@ -9,8 +9,7 @@ import { ChatComponent } from './chat/chat.component';
   declarations: [
     AppComponent,
     ChatComponent
-  ],
-  imports: [
+  ],  imports: [
     BrowserModule,
     FormsModule // Add FormsModule here
   ],
