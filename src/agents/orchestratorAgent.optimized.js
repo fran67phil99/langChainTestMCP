@@ -19,7 +19,21 @@ const mcpToolsCache = {
 async function intelligentMcpRouting(userInput, mcpTools) {
   const query = userInput.toLowerCase();
   
-  // Cerca nei tool MCP reali per vedere se la query è correlata
+  // Prima controlla se l'utente sta chiedendo info sui tool disponibili
+  const toolListPatterns = [
+    /\b(che|what|quali|which)\s+(tool|strument|command|funzion)/i,
+    /\b(tool|strument).+(disponibil|available|ho a disposizione)/i,
+    /\b(lista|list|elenco).+(tool|strument)/i,
+    /\b(docker|azure|aws|cloud).+(tool|strument|available|disponibil)/i,
+    /\btools?\s+(have|available|disponibil)/i
+  ];
+    // PRIORITÀ ASSOLUTA: Se l'utente chiede info sui tool, sempre list_tools
+  if (toolListPatterns.some(pattern => pattern.test(query))) {
+    console.log('🔍 Tool List Request: L\'utente chiede informazioni sui tool disponibili');
+    return 'list_tools';
+  }
+  
+  // Solo se NON sta chiedendo info sui tool, cerca tool rilevanti per esecuzione
   const relevantTools = mcpTools.filter(tool => {
     const toolName = tool.name.toLowerCase();
     const toolDescription = (tool.description || '').toLowerCase();
@@ -57,6 +71,79 @@ async function intelligentMcpRouting(userInput, mcpTools) {
   // Se non è chiaro, analizza con LLM (per massima flessibilità)
   console.log('🤔 Ambiguous Routing: Richiede analisi LLM');
   return 'analyze';
+}
+
+// Funzione per generare la risposta con la lista dei tool disponibili
+function generateToolListResponse(mcpTools, originalQuery) {
+  const query = originalQuery.toLowerCase();
+  
+  // Filtra i tool in base alla query specifica
+  let filteredTools = mcpTools;
+  let categoryTitle = 'Tool MCP Disponibili';
+  
+  if (query.includes('docker')) {
+    filteredTools = mcpTools.filter(tool => 
+      tool.serverName.toLowerCase().includes('docker') ||
+      tool.name.toLowerCase().includes('docker') ||
+      (tool.description && tool.description.toLowerCase().includes('docker'))
+    );
+    categoryTitle = 'Tool Docker Disponibili';
+  } else if (query.includes('azure')) {
+    filteredTools = mcpTools.filter(tool => 
+      tool.serverName.toLowerCase().includes('azure') ||
+      tool.name.toLowerCase().includes('azure') ||
+      (tool.description && tool.description.toLowerCase().includes('azure'))
+    );
+    categoryTitle = 'Tool Azure Disponibili';
+  } else if (query.includes('aws')) {
+    filteredTools = mcpTools.filter(tool => 
+      tool.serverName.toLowerCase().includes('aws') ||
+      tool.name.toLowerCase().includes('aws') ||
+      (tool.description && tool.description.toLowerCase().includes('aws'))
+    );
+    categoryTitle = 'Tool AWS Disponibili';
+  }
+  
+  if (filteredTools.length === 0) {
+    return `🔍 **${categoryTitle}**\n\n❌ Non sono disponibili tool MCP per la categoria richiesta.\n\n📋 **Tool totali disponibili:** ${mcpTools.length}\n\nPer vedere tutti i tool disponibili, chiedi: "quali tool hai a disposizione?"`;
+  }
+  
+  // Raggruppa per server
+  const serverGroups = {};
+  filteredTools.forEach(tool => {
+    const serverName = tool.serverName || 'Unknown Server';
+    if (!serverGroups[serverName]) {
+      serverGroups[serverName] = [];
+    }
+    serverGroups[serverName].push(tool);
+  });
+  
+  let response = `🔧 **${categoryTitle}**\n\n`;
+  
+  if (Object.keys(serverGroups).length === 1 && filteredTools.length === mcpTools.length) {
+    // Mostra tutti i tool se non c'è filtro specifico
+    response += `📊 **Totale tool disponibili:** ${mcpTools.length}\n\n`;
+  }
+  
+  Object.entries(serverGroups).forEach(([serverName, tools]) => {
+    response += `🖥️ **${serverName}** (${tools.length} tool${tools.length > 1 ? 's' : ''}):\n`;
+    tools.forEach((tool, index) => {
+      response += `   ${index + 1}. \`${tool.name}\``;
+      if (tool.description) {
+        response += ` - ${tool.description}`;
+      }
+      response += '\n';
+    });
+    response += '\n';
+  });
+  
+  if (filteredTools.length !== mcpTools.length) {
+    response += `💡 **Suggerimento:** Per vedere tutti i ${mcpTools.length} tool disponibili, chiedi: "quali tool hai a disposizione?"`;
+  } else {
+    response += `💡 **Suggerimento:** Puoi utilizzare questi tool per eseguire operazioni specifiche. Basta chiedere di eseguire un'azione e selezionerò automaticamente il tool più appropriato.`;
+  }
+  
+  return response;
 }
 
 // Funzione per ottenere i tool MCP con caching
@@ -157,11 +244,19 @@ async function processEnglishQuery(englishQuery, threadId, existingMessages = []
     console.log(`🛠️ Orchestrator: Loading MCP tools for intelligent routing...`);
     mcpTools = await getCachedMcpTools();
     console.log(`Loaded ${mcpTools.length} MCP tools (cached: ${mcpToolsCache.tools ? 'YES' : 'NO'})`);
-    
-    // 2. Routing intelligente basato sui tool MCP reali
+      // 2. Routing intelligente basato sui tool MCP reali
     const routeDecision = await intelligentMcpRouting(englishQuery, mcpTools);
     
-    if (routeDecision === 'mcp') {
+    if (routeDecision === 'list_tools') {
+      // Risposta diretta con la lista dei tool disponibili
+      console.log(`🔍 Orchestrator: Generating tool list response`);
+      const toolListResponse = generateToolListResponse(mcpTools, englishQuery);
+      
+      return {
+        selectedAgent: 'tool_list',
+        finalResponse: toolListResponse
+      };
+    } else if (routeDecision === 'mcp') {
       // Route diretto a MCP - i tool sono già stati caricati
       shouldUseMcp = true;
       console.log(`🎯 Orchestrator: Direct route to MCP Agent (relevant tools found)`);
@@ -173,7 +268,7 @@ async function processEnglishQuery(englishQuery, threadId, existingMessages = []
       // Caso ambiguo - usa analisi LLM completa
       console.log(`🤔 Orchestrator: Ambiguous query - using LLM analysis...`);
       shouldUseMcp = await shouldUseMcpAgent(englishQuery, mcpTools, existingMessages);
-    }    // 3. Intelligent routing using specialized agents with conversation context
+    }// 3. Intelligent routing using specialized agents with conversation context
     console.log(`🚦 Orchestrator: Agent decision - MCP: ${shouldUseMcp}`);
     const selectedAgent = shouldUseMcp ? 'mcp_agent' : 'general_agent';
     console.log(`✅ Orchestrator: Selected ${selectedAgent} for query`);
