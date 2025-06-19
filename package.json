@@ -1,12 +1,11 @@
 {
   "name": "app",
   "version": "1.0.0",
-  "description": "Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile di elaborazione delle richieste.",
-  "main": "dist/server.js",
+  "description": "Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile di elaborazione delle richieste.",  "main": "simple-server.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "tsc -w & nodemon dist/server.js",
+    "build": "echo \"No build needed - using JavaScript server\"",
+    "start": "node simple-server.js",
+    "dev": "nodemon simple-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
