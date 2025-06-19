@@ -1,5 +1,21 @@
 {
   "mcpServers": {
+    "MCP_DOCKER": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-l",
+        "mcp.client=claude-desktop",
+        "--rm",
+        "-i",
+        "alpine/socat",
+        "STDIO",
+        "TCP:host.docker.internal:8811"
+      ],
+      "enabled": true,
+      "timeout": 30000,
+      "description": "Server MCP per gestione Docker containers, images, networks e volumes"
+    },
     "Azure MCP Server": {
       "command": "npx",
       "args": [
@@ -8,11 +24,9 @@
         "server",
         "start"
       ],
-      "enabled": true,
+      "enabled": false,
       "timeout": 30000,
-      "quick_route_patterns": [
-        "\\b(azure|cloud|storage|functions)\\b"
-      ]
+      "description": "Server MCP per Azure cloud services, storage, functions e risorse"
     },
     "Weather MCP Server": {
       "command": "node",
@@ -21,9 +35,7 @@
       ],
       "enabled": false,
       "timeout": 10000,
-      "quick_route_patterns": [
-        "\\b(weather|meteo|temperatura|clima)\\b"
-      ]
+      "description": "Server MCP per informazioni meteorologiche, temperatura e clima"
     }
   },
   "httpServers": [
@@ -32,16 +44,21 @@
       "name": "Mauden MCP Server",
       "url": "http://localhost:8080",
       "tools_endpoint": "/tools",
-      "description": "Server MCP principale per tools Mauden",
+      "description": "Server HTTP per dati dipendenti e stagisti Mauden tramite API REST",
       "enabled": true,
       "timeout": 10000,
       "retry_attempts": 3,
-      "priority": 1,
-      "quick_route_patterns": [
-        "\\b(stagist[ie]|intern|dipendent[ie]|employee|mauden|aziend|company|dataset|dati|csv)\\b",
-        "\\b(lista|elenco|informazioni|dettagli)\\s+(stagist|dipendent|employee)\\b",
-        "\\b(quant[ie]|numero|count)\\s+(stagist|dipendent)\\b"
-      ]
+      "priority": 1
+    },
+    {
+      "type": "http",
+      "enabled": false,
+      "timeout": 10000,
+      "name": "ProvaMcp",
+      "url": "http://provabho",
+      "tools_endpoint": "/tools",
+      "description": "Prova di creazione mcp da frontend",
+      "id": "server_1750334540380"
     }
   ],
   "discovery": {

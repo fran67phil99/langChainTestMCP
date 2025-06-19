@@ -99,6 +99,12 @@ Guidelines:
 async function selectMcpTool(userInput, mcpTools) {
   console.log(`🤖 MCP Agent Tool Selector: Selecting best tool for query...`);
   
+  // Se non ci sono tool disponibili, non possiamo procedere
+  if (!mcpTools || mcpTools.length === 0) {
+    console.log(`❌ No MCP tools available for selection`);
+    throw new Error('No MCP tools available');
+  }
+  
   try {
     // Let LLM decide which tool to use based on user query and tool descriptions
     const toolDescriptions = mcpTools.map((tool, index) => 

@@ -1,9 +1,11 @@
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
+const MCPClient = require('../utils/mcpClient');
 
 const router = express.Router();
 const CONFIG_FILE = path.join(__dirname, '../../mcp_servers_standard.json');
+const mcpClient = new MCPClient();
 
 // Utility per caricare configurazione
 async function loadConfig() {
@@ -46,11 +48,9 @@ function unifyServerConfig(config) {
         id: name.toLowerCase().replace(/\s+/g, '_'),
         name,
         type: 'command',
-        command: serverConfig.command,
-        args: serverConfig.args,
+        command: serverConfig.command,        args: serverConfig.args,
         enabled: serverConfig.enabled !== false,
         timeout: serverConfig.timeout || 10000,
-        quick_route_patterns: serverConfig.quick_route_patterns || [],
         description: serverConfig.description || ''
       });
     });
@@ -82,11 +82,9 @@ router.post('/servers', async (req, res) => {
     } else if (newServer.type === 'command') {
       if (!config.mcpServers) config.mcpServers = {};
       config.mcpServers[newServer.name] = {
-        command: newServer.command,
-        args: newServer.args,
+        command: newServer.command,        args: newServer.args,
         enabled: newServer.enabled,
         timeout: newServer.timeout,
-        quick_route_patterns: newServer.quick_route_patterns,
         description: newServer.description
       };
     }
@@ -117,11 +115,9 @@ router.put('/servers/:id', async (req, res) => {
     } else if (updatedServer.type === 'command') {
       if (config.mcpServers[updatedServer.name]) {
         config.mcpServers[updatedServer.name] = {
-          command: updatedServer.command,
-          args: updatedServer.args,
+          command: updatedServer.command,          args: updatedServer.args,
           enabled: updatedServer.enabled,
           timeout: updatedServer.timeout,
-          quick_route_patterns: updatedServer.quick_route_patterns,
           description: updatedServer.description
         };
       }
@@ -201,6 +197,81 @@ router.post('/servers/:id/toggle', async (req, res) => {
   }
 });
 
+// GET /api/mcp/servers/:id/tools - Ottiene la lista dei tool da un server MCP
+router.get('/servers/:id/tools', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    const serverId = req.params.id;
+    
+    // Trova il server
+    const servers = unifyServerConfig(config);
+    const server = servers.find(s => s.id === serverId);
+    
+    if (!server) {
+      return res.json({ success: false, error: 'Server non trovato' });
+    }
+    
+    if (server.type === 'command') {
+      // Per server MCP standard, usa il client MCP
+      try {
+        const tools = await mcpClient.getToolsList(server);
+        res.json({ success: true, tools: tools });
+      } catch (error) {
+        res.json({ success: false, error: error.message });
+      }
+    } else if (server.type === 'http') {
+      // Per server HTTP, usa l'endpoint /tools
+      const axios = require('axios');
+      try {
+        const response = await axios.get(`${server.url}${server.tools_endpoint || '/tools'}`, {
+          timeout: server.timeout || 5000
+        });
+        res.json({ success: true, tools: response.data });
+      } catch (error) {
+        res.json({ success: false, error: error.message });
+      }
+    } else {
+      res.json({ success: false, error: 'Tipo server non supportato' });
+    }
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/mcp/servers/:id/tools/:toolName/call - Invoca un tool specifico
+router.post('/servers/:id/tools/:toolName/call', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    const serverId = req.params.id;
+    const toolName = req.params.toolName;
+    const arguments_ = req.body.arguments || {};
+    
+    // Trova il server
+    const servers = unifyServerConfig(config);
+    const server = servers.find(s => s.id === serverId);
+    
+    if (!server) {
+      return res.json({ success: false, error: 'Server non trovato' });
+    }
+    
+    if (server.type === 'command') {
+      // Per server MCP standard, usa il client MCP
+      try {
+        const result = await mcpClient.callTool(server, toolName, arguments_);
+        res.json({ success: true, result: result });
+      } catch (error) {
+        res.json({ success: false, error: error.message });
+      }
+    } else {
+      res.json({ success: false, error: 'Tool call supportato solo per server MCP standard' });
+    }
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/mcp/servers/:id/test - Testa connessione server
 router.get('/servers/:id/test', async (req, res) => {
   try {
@@ -225,15 +296,36 @@ router.get('/servers/:id/test', async (req, res) => {
         res.json({ success: true, status: response.status });
       } catch (error) {
         res.json({ success: false, error: error.message });
+      }    } else {
+      // Test server MCP standard - prova a connettersi e ottenere la lista dei tool
+      try {
+        const tools = await mcpClient.getToolsList(server, true); // throwOnError = true per i test
+        res.json({ 
+          success: true, 
+          note: `Server MCP connesso - ${tools.length} tool disponibili`,
+          toolsCount: tools.length 
+        });
+      } catch (error) {
+        res.json({ success: false, error: `Errore connessione MCP: ${error.message}` });
       }
-    } else {
-      // Test command server (più complesso, per ora simuliamo)
-      res.json({ success: true, note: 'Test command server non implementato' });
     }
     
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Process cleanup quando il server si chiude
+process.on('SIGINT', async () => {
+  console.log('Closing MCP connections...');
+  await mcpClient.disconnectAll();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Closing MCP connections...');
+  await mcpClient.disconnectAll();
+  process.exit(0);
 });
 
 module.exports = router;

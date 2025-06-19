@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { McpFormatConverter } = require('./mcpFormatConverter');
+const { mcpConfigManager } = require('./mcpConfig');
 
 /**
  * Fetches available MCP tool definitions from configured servers
@@ -96,8 +97,23 @@ async function discoverToolsFromServer(serverConfig) {
     return mcpConfigManager.getCachedTools(serverId);
   }
 
+  // Distingui tra server HTTP e server command MCP standard
+  if (serverConfig.type === 'http' && serverConfig.url) {
+    return await discoverFromHttpServer(serverConfig);
+  } else if (serverConfig.type === 'command' || serverConfig.command) {
+    return await discoverFromMcpCommandServer(serverConfig);
+  } else {
+    throw new Error(`Server type not supported: ${serverConfig.type || 'unknown'}`);
+  }
+}
+
+/**
+ * Scopre tool da server HTTP (legacy)
+ */
+async function discoverFromHttpServer(serverConfig) {
+  const serverId = serverConfig.id;
   const toolsUrl = `${serverConfig.url}${serverConfig.tools_endpoint}`;
-  const timeout = serverConfig.timeout || 3000; // Ridotto da 10s a 3s
+  const timeout = serverConfig.timeout || 3000;
   const retryAttempts = serverConfig.retry_attempts || 3;
   
   console.log(`🔍 ${serverConfig.name}: Discovering tools from ${toolsUrl}`);
@@ -136,6 +152,36 @@ async function discoverToolsFromServer(serverConfig) {
       const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
+  }
+}
+
+/**
+ * Scopre tool da server MCP command standard (JSON-RPC)
+ */
+async function discoverFromMcpCommandServer(serverConfig) {
+  const serverId = serverConfig.id;
+  
+  console.log(`🔍 ${serverConfig.name}: Discovering tools via MCP standard protocol`);
+  
+  try {
+    // Usa il client MCP per ottenere i tool via JSON-RPC
+    const MCPClient = require('./mcpClient');
+    const mcpClient = new MCPClient();
+    
+    const tools = await mcpClient.getToolsList(serverConfig);
+    
+    // Converti i tool MCP in formato interno
+    const formattedTools = tools.map(tool => createToolFromMcpSchema(tool, serverConfig));
+    
+    // Aggiorna cache
+    mcpConfigManager.updateCache(serverId, formattedTools);
+    
+    console.log(`✅ ${serverConfig.name}: Successfully discovered ${formattedTools.length} MCP tools`);
+    return formattedTools;
+    
+  } catch (error) {
+    console.warn(`❌ ${serverConfig.name}: MCP discovery failed - ${error.message}`);
+    throw error;
   }
 }
 
@@ -196,6 +242,26 @@ function createToolFromSchema(schema, serverConfig) {
           server: serverConfig.name
         });
       }
+    }
+  };
+}
+
+/**
+ * Crea un tool object da uno schema MCP standard (JSON-RPC)
+ */
+function createToolFromMcpSchema(mcpTool, serverConfig) {
+  return {
+    name: mcpTool.name,
+    description: `[${serverConfig.name}] ${mcpTool.description || mcpTool.name}`,
+    serverId: serverConfig.id,
+    serverName: serverConfig.name,
+    serverType: 'command',
+    inputSchema: mcpTool.inputSchema,
+    isCommand: true,
+    call: async function(params) {
+      const MCPClient = require('./mcpClient');
+      const mcpClient = new MCPClient();
+      return await mcpClient.callTool(serverConfig, this.name, params);
     }
   };
 }

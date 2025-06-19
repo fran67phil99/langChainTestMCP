@@ -1,12 +1,11 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { ChatComponent } from './chat/chat.component';
-import { McpManagerComponent } from './mcp-manager/mcp-manager.component';
 
+// Route semplici per supportare deep linking, ma i componenti sono gestiti via tab
 const routes: Routes = [
-  { path: '', component: ChatComponent },
-  { path: 'chat', component: ChatComponent },
-  { path: 'mcp-manager', component: McpManagerComponent },
+  { path: '', redirectTo: '/chat', pathMatch: 'full' },
+  { path: 'chat', children: [] }, // Route vuota, gestita dal sistema di tab
+  { path: 'mcp-manager', children: [] }, // Route vuota, gestita dal sistema di tab
   { path: '**', redirectTo: '/chat' }
 ];
 

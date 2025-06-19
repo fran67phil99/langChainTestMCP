@@ -1,7 +1,8 @@
 {
   "name": "app",
   "version": "1.0.0",
-  "description": "Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile di elaborazione delle richieste.",  "main": "simple-server.js",
+  "description": "Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile di elaborazione delle richieste.",
+  "main": "simple-server.js",
   "scripts": {
     "build": "echo \"No build needed - using JavaScript server\"",
     "start": "node simple-server.js",
@@ -29,6 +30,7 @@
   "dependencies": {
     "@langchain/langgraph": "^0.3.1",
     "@langchain/openai": "^0.5.12",
+    "@modelcontextprotocol/sdk": "^1.13.0",
     "@types/eventsource": "^1.1.15",
     "axios": "^1.9.0",
     "commander": "^14.0.0",

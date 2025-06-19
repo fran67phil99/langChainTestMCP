@@ -11,7 +11,6 @@ interface McpServer {
   args?: string[];
   enabled: boolean;
   timeout: number;
-  quick_route_patterns: string[];
   description?: string;
 }
 
@@ -25,9 +24,7 @@ export class McpManagerComponent implements OnInit {
   servers: McpServer[] = [];
   showForm = false;
   editingServer: McpServer | null = null;
-  currentServer: Partial<McpServer> = {};
-  argsText = '';
-  patternsText = '';
+  currentServer: Partial<McpServer> = {};  argsText = '';
   testResults: any[] = [];
 
   constructor(private http: HttpClient) {}
@@ -50,24 +47,19 @@ export class McpManagerComponent implements OnInit {
       alert('Errore nel caricamento dei server MCP. Assicurati che il server Node.js sia avviato sulla porta 8001.');
     }
   }
-
   addNewServer() {
     this.currentServer = {
       type: 'http',
       enabled: true,
-      timeout: 10000,
-      quick_route_patterns: []
+      timeout: 10000
     };
     this.argsText = '';
-    this.patternsText = '';
     this.editingServer = null;
     this.showForm = true;
   }
-
   editServer(server: McpServer) {
     this.currentServer = { ...server };
     this.argsText = server.args?.join('\n') || '';
-    this.patternsText = server.quick_route_patterns.join('\n');
     this.editingServer = server;
     this.showForm = true;
   }
@@ -87,16 +79,11 @@ export class McpManagerComponent implements OnInit {
       delete (this.currentServer as any).tools_endpoint;
     }
   }
-
   async saveServer() {
     const serverData = { ...this.currentServer };
     
     if (this.argsText) {
       serverData.args = this.argsText.split('\n').filter(arg => arg.trim());
-    }
-    
-    if (this.patternsText) {
-      serverData.quick_route_patterns = this.patternsText.split('\n').filter(p => p.trim());
     }
 
     if (!serverData.id) {

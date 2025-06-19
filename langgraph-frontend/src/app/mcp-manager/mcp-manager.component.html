@@ -45,18 +45,8 @@
         </div>
         <div class="server-path">
           <strong>Timeout:</strong> {{ server.timeout }}ms
-        </div>
-        <div *ngIf="server.description" style="margin-top: 8px; color: #86868b; font-size: 14px;">
+        </div>        <div *ngIf="server.description" style="margin-top: 8px; color: #86868b; font-size: 14px;">
           {{ server.description }}
-        </div>
-        
-        <div class="patterns" *ngIf="server.quick_route_patterns.length > 0" style="margin-top: 12px;">
-          <div style="font-size: 13px; color: #86868b; margin-bottom: 6px;">
-            <strong>Pattern di Routing Rapido:</strong>
-          </div>
-          <span *ngFor="let pattern of server.quick_route_patterns" class="pattern-tag">
-            {{ pattern }}
-          </span>
         </div>
       </div>
     </div>
@@ -130,24 +120,12 @@
                max="60000"
                step="1000">
       </div>
-      
-      <div class="form-group">
+        <div class="form-group">
         <label>📝 Descrizione:</label>
         <textarea [(ngModel)]="currentServer.description" 
                   name="description" 
                   rows="3"
                   placeholder="Descrizione del server MCP e delle sue funzionalità"></textarea>
-      </div>
-      
-      <div class="form-group">
-        <label>🚀 Pattern di Routing Rapido (uno per riga):</label>
-        <textarea [(ngModel)]="patternsText" 
-                  name="patterns" 
-                  rows="3"
-                  placeholder="\\b(azure|blob|storage)\\b&#10;\\b(database|sql|query)\\b&#10;\\b(email|notification)\\b"></textarea>
-        <small style="color: #86868b; font-size: 12px; margin-top: 4px; display: block;">
-          Pattern regex per routing rapido senza chiamate LLM costose
-        </small>
       </div>
       
       <div class="form-group checkbox-group">

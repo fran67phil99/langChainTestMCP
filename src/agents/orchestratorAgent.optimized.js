@@ -15,38 +15,47 @@ const mcpToolsCache = {
   ttl: 5 * 60 * 1000 // 5 minuti
 };
 
-// Funzione per routing intelligente rapido dinamico
-function quickRouteAgent(userInput) {
+// Funzione per routing intelligente basato sui tool MCP reali (COMPLETAMENTE DINAMICO)
+async function intelligentMcpRouting(userInput, mcpTools) {
   const query = userInput.toLowerCase();
   
-  // Carica pattern dinamici dalla configurazione MCP
-  const { McpFormatConverter } = require('../utils/mcpFormatConverter');
-  const converter = new McpFormatConverter();
-  const config = converter.loadUnifiedConfig();
-  const patterns = converter.getAllQuickRoutePatterns(config);
+  // Cerca nei tool MCP reali per vedere se la query è correlata
+  const relevantTools = mcpTools.filter(tool => {
+    const toolName = tool.name.toLowerCase();
+    const toolDescription = (tool.description || '').toLowerCase();
+    const serverName = (tool.serverName || '').toLowerCase();
+    
+    // Cerca parole chiave nei nomi, descrizioni e server dei tool reali
+    const queryWords = query.split(' ').filter(word => word.length > 2);
+    
+    return queryWords.some(word => 
+      toolName.includes(word) || 
+      toolDescription.includes(word) || 
+      serverName.includes(word) ||
+      word.includes(toolName.split('_')[0]) // Cerca parti del nome del tool
+    );
+  });
   
-  // Se matcha pattern di qualsiasi server MCP, vai diretto a MCP
-  for (const patternInfo of patterns) {
-    if (patternInfo.pattern.test(query)) {
-      console.log(`🎯 Quick Route: MCP Agent (pattern ${patternInfo.serverName} rilevato)`);
-      return 'mcp';
-    }
+  if (relevantTools.length > 0) {
+    console.log(`🎯 MCP Routing: Trovati ${relevantTools.length} tool rilevanti:`, 
+               relevantTools.map(t => t.name));
+    return 'mcp';
   }
   
-  // Pattern per query generiche
+  // Pattern per query generiche che NON richiedono MCP (molto conservativi)
   const generalPatterns = [
     /\b(ciao|hello|come stai|how are you|cosa puoi fare|help|aiuto)\b/i,
-    /\b(spiegami|explain|dimmi|tell me|cos[aeì]|what|perch[eé]|why)\b/i,
-    /\b(scrivi|write|crea|create|genera|generate)\b/i
+    /\b(spiegami|explain|dimmi|tell me)\s+(cos[aeì]|what|perch[eé]|why)\b/i,
+    /\b(scrivi|write|crea|create|genera|generate)\s+(testo|text|articolo|article|poesia|poem)\b/i
   ];
   
-  // Se matcha pattern generici, vai a General
   if (generalPatterns.some(pattern => pattern.test(query))) {
-    console.log('🎯 Quick Route: General Agent (pattern generico rilevato)');
+    console.log('🎯 General Routing: Pattern generico rilevato');
     return 'general';
   }
-    // Caso ambiguo, richiede analisi LLM
-  console.log('🤔 Quick Route: Ambiguous - richiede analisi LLM');
+  
+  // Se non è chiaro, analizza con LLM (per massima flessibilità)
+  console.log('🤔 Ambiguous Routing: Richiede analisi LLM');
   return 'analyze';
 }
 
@@ -143,43 +152,39 @@ async function runOrchestratorOptimized(userInput, threadId, existingMessages = 
 // Streamlined English processing with modular agent delegation  
 async function processEnglishQuery(englishQuery, threadId, existingMessages = []) {
   console.log(`🔧 Orchestrator: Processing English query: "${englishQuery}"`);
-  
-  try {
-    // 1. Quick routing check per evitare chiamate costose quando possibile
-    const quickRoute = quickRouteAgent(englishQuery);
+    try {
+    // 1. Carica i tool MCP per fare routing intelligente
+    console.log(`🛠️ Orchestrator: Loading MCP tools for intelligent routing...`);
+    mcpTools = await getCachedMcpTools();
+    console.log(`Loaded ${mcpTools.length} MCP tools (cached: ${mcpToolsCache.tools ? 'YES' : 'NO'})`);
     
-    let shouldUseMcp = false;
-    let mcpTools = [];
+    // 2. Routing intelligente basato sui tool MCP reali
+    const routeDecision = await intelligentMcpRouting(englishQuery, mcpTools);
     
-    if (quickRoute === 'mcp') {
-      // Route diretto a MCP - carica solo se necessario
+    if (routeDecision === 'mcp') {
+      // Route diretto a MCP - i tool sono già stati caricati
       shouldUseMcp = true;
-      console.log(`🛠️ Orchestrator: Loading MCP tools for business query...`);
-      mcpTools = await getCachedMcpTools();
-      console.log(`Loaded ${mcpTools.length} MCP tools (cached: ${mcpToolsCache.tools ? 'YES' : 'NO'})`);
-    } else if (quickRoute === 'general') {
+      console.log(`🎯 Orchestrator: Direct route to MCP Agent (relevant tools found)`);
+    } else if (routeDecision === 'general') {
       // Route diretto a General Agent
       shouldUseMcp = false;
       console.log(`🎯 Orchestrator: Direct route to General Agent`);
     } else {
       // Caso ambiguo - usa analisi LLM completa
       console.log(`🤔 Orchestrator: Ambiguous query - using LLM analysis...`);
-      mcpTools = await getCachedMcpTools();
       shouldUseMcp = await shouldUseMcpAgent(englishQuery, mcpTools, existingMessages);
-    }
-
-    // 2. Intelligent routing using specialized agents with conversation context
+    }    // 3. Intelligent routing using specialized agents with conversation context
     console.log(`🚦 Orchestrator: Agent decision - MCP: ${shouldUseMcp}`);
     const selectedAgent = shouldUseMcp ? 'mcp_agent' : 'general_agent';
     console.log(`✅ Orchestrator: Selected ${selectedAgent} for query`);
 
-    // 3. Prepare messages for the selected agent
+    // 4. Prepare messages for the selected agent
     const messages = [
       ...existingMessages,
       new HumanMessage(englishQuery)
     ];
 
-    // 4. Delegate to specialized agent
+    // 5. Delegate to specialized agent
     if (selectedAgent === 'mcp_agent') {
       console.log(`🔄 Orchestrator: Delegating to MCP Agent`);
       
