@@ -1,0 +1,33 @@
+{
+  "serverMode": "both",
+  "restServer": {
+    "enabled": true,
+    "port": 8080,
+    "description": "Classic HTTP REST API server with /tools endpoint",
+    "endpoints": {
+      "/tools": "List available tools",
+      "/interns": "Get interns data",
+      "/employees": "Get employees data",
+      "/search": "Search data"
+    }
+  },
+  "mcpServer": {
+    "enabled": true,
+    "port": 5009,
+    "description": "MCP-compliant JSON-RPC 2.0 server",
+    "protocol": "json-rpc",
+    "version": "2.0",
+    "features": [
+      "tools",
+      "resources",
+      "prompts"
+    ]
+  },
+  "defaultMode": "rest",
+  "allowModeSwitch": true,
+  "documentation": {
+    "rest": "Use 'rest' mode for traditional HTTP REST API with endpoints like /tools",
+    "mcp": "Use 'mcp' mode for Model Context Protocol JSON-RPC 2.0 compliance",
+    "both": "Run both servers simultaneously on different ports"
+  }
+}

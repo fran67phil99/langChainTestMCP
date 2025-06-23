@@ -1,4 +1,54 @@
-# Orchestratore LangGraph con MCP - Full Stack
+# Mauden MCP System - Frontend-Backend Architecture
+
+🚀 **SISTEMA COMPLETAMENTE MODERNIZZATO!**
+
+Architettura **Frontend-Backend completa** con:
+- ✅ **Frontend Angular** moderno e responsive (porta 4200)
+- ✅ **Backend API Server** con endpoint REST completi (porta 3000) 
+- ✅ **Protocollo MCP corretto** JSON-RPC 2.0 con sequenza `initialize` → `tools/list`
+- ✅ **Gestione unificata** server HTTP e STDIO
+- ✅ **Test avanzati** con fallback intelligente REST
+
+## ⚡ AVVIO RAPIDO
+
+### 🚀 Metodo 1: Avvio Completo del Sistema
+```bash
+# Avvia sia il server API che il frontend Angular
+.\start-mcp-system.ps1
+```
+
+### 🔧 Metodo 2: Avvio Manuale
+```bash
+# 1. Avvia il server API MCP (porta 3000)
+npm run api-server
+
+# 2. In un altro terminale, avvia il frontend Angular (porta 4200)
+cd langgraph-frontend
+ng serve
+```
+
+### 🌐 Accesso all'Interfaccia
+- **Frontend Angular**: http://localhost:4200
+- **MCP Manager**: http://localhost:4200/mcp-manager
+- **Server API**: http://localhost:3000
+- **API Health Check**: http://localhost:3000/health
+
+### 📋 Gestione Server MCP (Legacy CLI)
+```bash
+# Configura il sistema
+npm run config
+
+# Avvia server con CLI
+npm start              # Modalità predefinita
+npm run start:rest     # Solo REST
+npm run start:mcp      # Solo MCP  
+npm run start:both     # Entrambi
+```
+
+📚 **Guida Rapida**: [QUICK-START.md](QUICK-START.md)  
+📖 **Documentazione Completa**: [README-SERVER-MODES.md](README-SERVER-MODES.md)
+
+---
 
 Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile. Il progetto include sia un backend Node.js che un frontend Angular per un'esperienza completa.
 

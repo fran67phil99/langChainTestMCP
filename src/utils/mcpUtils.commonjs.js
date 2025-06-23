@@ -108,13 +108,32 @@ async function discoverToolsFromServer(serverConfig) {
 }
 
 /**
- * Scopre tool da server HTTP (legacy)
+ * Scopre tool da server HTTP (supporta sia REST che MCP)
  */
 async function discoverFromHttpServer(serverConfig) {
   const serverId = serverConfig.id;
-  const toolsUrl = `${serverConfig.url}${serverConfig.tools_endpoint}`;
   const timeout = serverConfig.timeout || 3000;
   const retryAttempts = serverConfig.retry_attempts || 3;
+  
+  // Determina se è un server MCP-compliant o REST
+  if (serverConfig.mcp_endpoint) {
+    // Server MCP-compliant
+    const mcpUrl = `${serverConfig.url}${serverConfig.mcp_endpoint}`;
+    console.log(`🔍 ${serverConfig.name}: Discovering tools from ${mcpUrl}`);
+    return await discoverFromMcpHttpServer(serverConfig, mcpUrl, timeout, retryAttempts);
+  } else {
+    // Server REST classico
+    const toolsUrl = `${serverConfig.url}${serverConfig.tools_endpoint || '/tools'}`;
+    console.log(`🔍 ${serverConfig.name}: Discovering tools from ${toolsUrl}`);
+    return await discoverFromRestHttpServer(serverConfig, toolsUrl, timeout, retryAttempts);
+  }
+}
+
+/**
+ * Scopre tool da server REST HTTP (legacy)
+ */
+async function discoverFromRestHttpServer(serverConfig, toolsUrl, timeout, retryAttempts) {
+  const serverId = serverConfig.id;
   
   console.log(`🔍 ${serverConfig.name}: Discovering tools from ${toolsUrl}`);
 
@@ -186,6 +205,88 @@ async function discoverFromMcpCommandServer(serverConfig) {
 }
 
 /**
+ * Scopre tool da server MCP-compliant HTTP (JSON-RPC 2.0)
+ */
+async function discoverFromMcpHttpServer(serverConfig, mcpUrl, timeout, retryAttempts) {
+  const serverId = serverConfig.id;
+
+  for (let attempt = 1; attempt <= retryAttempts; attempt++) {
+    try {
+      // 1. Prima chiamata: initialize (obbligatoria per MCP)
+      const initializePayload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            roots: {
+              listChanged: true
+            },
+            sampling: {}
+          },
+          clientInfo: {
+            name: "Mauden MCP Discovery Client",
+            version: "1.0.0"
+          }
+        }
+      };
+
+      const initResponse = await axios.post(mcpUrl, initializePayload, {
+        timeout,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'MCP-Discovery-Agent/1.0'
+        }
+      });
+
+      if (initResponse.status !== 200 || !initResponse.data?.result) {
+        throw new Error(`MCP Initialize failed: ${initResponse.status}`);
+      }
+
+      // 2. Seconda chiamata: tools/list
+      const toolsListPayload = {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/list",
+        params: {}
+      };
+
+      const toolsResponse = await axios.post(mcpUrl, toolsListPayload, {
+        timeout,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (toolsResponse.status !== 200 || !toolsResponse.data?.result?.tools) {
+        throw new Error(`MCP tools/list failed: ${toolsResponse.status}`);
+      }
+
+      const mcpTools = toolsResponse.data.result.tools;
+      const tools = mcpTools.map((mcpTool) => createToolFromMcpSchema(mcpTool, serverConfig));
+      
+      // Aggiorna cache
+      mcpConfigManager.updateCache(serverId, tools);
+      
+      console.log(`✅ ${serverConfig.name}: Successfully discovered ${tools.length} MCP tools`);
+      return tools;
+
+    } catch (error) {
+      console.warn(`⚠️ ${serverConfig.name}: Attempt ${attempt}/${retryAttempts} failed - ${error.message}`);
+      
+      if (attempt === retryAttempts) {
+        throw new Error(`Failed after ${retryAttempts} attempts: ${error.message}`);
+      }
+      
+      // Aspetta prima del retry (exponential backoff)
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+/**
  * Crea un tool object da uno schema MCP
  */
 function createToolFromSchema(schema, serverConfig) {
@@ -252,16 +353,59 @@ function createToolFromSchema(schema, serverConfig) {
 function createToolFromMcpSchema(mcpTool, serverConfig) {
   return {
     name: mcpTool.name,
-    description: `[${serverConfig.name}] ${mcpTool.description || mcpTool.name}`,
+    description: `[${serverConfig.name}] ${mcpTool.description}`,
     serverId: serverConfig.id,
     serverName: serverConfig.name,
-    serverType: 'command',
+    mcpTool: true, // Flag per identificare tool MCP
     inputSchema: mcpTool.inputSchema,
-    isCommand: true,
-    call: async function(params) {
-      const MCPClient = require('./mcpClient');
-      const mcpClient = new MCPClient();
-      return await mcpClient.callTool(serverConfig, this.name, params);
+    call: async function(input) {
+      try {
+        let params = {};
+        
+        // Parse input
+        try {
+          params = typeof input === 'string' ? JSON.parse(input) : input;
+        } catch (e) {
+          params = { input: input };
+        }
+
+        const mcpUrl = `${serverConfig.url}${serverConfig.mcp_endpoint}`;
+        console.log(`🔧 ${mcpTool.name} (${serverConfig.name}): Calling MCP tool via ${mcpUrl}`);
+
+        // Chiamata MCP tools/call
+        const toolCallPayload = {
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "tools/call",
+          params: {
+            name: mcpTool.name,
+            arguments: params
+          }
+        };
+
+        const response = await axios.post(mcpUrl, toolCallPayload, {
+          timeout: serverConfig.timeout || 10000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.status !== 200) {
+          throw new Error(`MCP tool call failed: HTTP ${response.status}`);
+        }
+
+        const result = response.data;
+        if (result.error) {
+          throw new Error(`MCP error: ${result.error.message || JSON.stringify(result.error)}`);
+        }
+
+        console.log(`✅ ${mcpTool.name}: Tool executed successfully`);
+        return result.result;
+
+      } catch (error) {
+        console.error(`❌ ${mcpTool.name}: Tool execution failed - ${error.message}`);
+        throw error;
+      }
     }
   };
 }

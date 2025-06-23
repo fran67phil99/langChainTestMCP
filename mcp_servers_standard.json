@@ -12,7 +12,7 @@
         "STDIO",
         "TCP:host.docker.internal:8811"
       ],
-      "enabled": true,
+      "enabled": false,
       "timeout": 30000,
       "description": "Server MCP per gestione Docker containers, images, networks e volumes"
     },
@@ -45,7 +45,7 @@
       "url": "http://localhost:8080",
       "tools_endpoint": "/tools",
       "description": "Server HTTP per dati dipendenti e stagisti Mauden tramite API REST",
-      "enabled": true,
+      "enabled": false,
       "timeout": 10000,
       "retry_attempts": 3,
       "priority": 1
@@ -59,6 +59,17 @@
       "tools_endpoint": "/tools",
       "description": "Prova di creazione mcp da frontend",
       "id": "server_1750334540380"
+    },
+    {
+      "id": "mauden_sql_server",
+      "name": "Mauden SQL MCP Server",
+      "url": "http://localhost:5009",
+      "mcp_endpoint": "/mcp",
+      "description": "Server MCP completo per import Excel, query database SQLite, analytics e gestione dati Mauden",
+      "enabled": true,
+      "timeout": 30000,
+      "retry_attempts": 3,
+      "priority": 1
     }
   ],
   "discovery": {

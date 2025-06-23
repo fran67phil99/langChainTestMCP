@@ -1,57 +1,165 @@
 <div class="mcp-header">
-  <div class="mcp-icon">L</div>  <div class="mcp-info">
-    <h3 class="mcp-title">Mauden MCP System</h3>
-    <p class="mcp-subtitle">Gestione Server Model Context Protocol</p>
+  <div class="mcp-icon">🚀</div>
+  <div class="mcp-info">
+    <h3 class="mcp-title">Mauden MCP System - Architettura Dinamica</h3>
+    <p class="mcp-subtitle">Gestione Server Model Context Protocol con modalità REST/MCP</p>
   </div>
 </div>
 
-<div class="mcp-manager">  <!-- Bottone Aggiungi Nuovo Server -->
-  <button (click)="addNewServer()" class="btn-add" *ngIf="!showForm">
-    Aggiungi Nuovo Server MCP
-  </button>
+<div class="mcp-manager">
   
-  <!-- Lista Server Esistenti -->
-  <div class="server-list">
-    <div *ngFor="let server of servers; trackBy: trackByServerId" 
-         class="server-card" [class.disabled]="!server.enabled">
-      
-      <div class="server-header">
-        <h3 class="server-name">{{ server.name }}</h3>
-        <div class="server-controls">
-          <button (click)="toggleServer(server)" 
-                  [class]="server.enabled ? 'btn-disable' : 'btn-enable'"
-                  [title]="server.enabled ? 'Disabilita server' : 'Abilita server'">
-            {{ server.enabled ? 'Disabilita' : 'Abilita' }}
-          </button>
-          <button (click)="editServer(server)" class="btn-edit" title="Modifica server">
-            Modifica
-          </button>
-          <button (click)="deleteServer(server.id)" class="btn-delete" title="Elimina server">
-            Elimina
-          </button>
-        </div>
+  <!-- Configurazione Modalità Server -->
+  <div class="server-mode-config">
+    <div class="mode-header">
+      <h3>⚙️ Configurazione Modalità Server</h3>
+      <button (click)="toggleModeConfig()" class="btn-toggle">
+        {{ showModeConfig ? 'Nascondi' : 'Mostra' }} Configurazione
+      </button>
+    </div>
+    
+    <div *ngIf="showModeConfig" class="mode-content">
+      <div class="current-mode">
+        <span class="mode-label">Modalità Attuale:</span>
+        <span class="mode-value" [ngClass]="'mode-' + serverMode.serverMode">
+          {{ serverMode.serverMode.toUpperCase() }}
+        </span>
       </div>
       
-      <div class="server-info">
-        <span class="server-type">
-          {{ server.type === 'http' ? '🌐 HTTP Server' : '⚡ Command Server' }}
-        </span>
+      <div class="mode-buttons">
+        <button (click)="updateServerMode('rest')" 
+                class="btn-mode" 
+                [class.active]="serverMode.serverMode === 'rest'">
+          🌐 Solo REST (porta {{ serverMode.restServer.port }})
+        </button>
+        <button (click)="updateServerMode('mcp')" 
+                class="btn-mode" 
+                [class.active]="serverMode.serverMode === 'mcp'">
+          🔗 Solo MCP (porta {{ serverMode.mcpServer.port }})
+        </button>
+        <button (click)="updateServerMode('both')" 
+                class="btn-mode" 
+                [class.active]="serverMode.serverMode === 'both'">
+          ⚡ Entrambi ({{ serverMode.restServer.port }} + {{ serverMode.mcpServer.port }})
+        </button>
+      </div>
+      
+      <div class="server-controls">
+        <button (click)="startServers()" class="btn-start">🚀 Avvia Server</button>
+        <button (click)="stopServers()" class="btn-stop">🛑 Arresta Server</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sezioni Server Separate -->
+  <div class="server-sections">
+    
+    <!-- HTTP Servers -->
+    <div class="server-section">
+      <div class="section-header">
+        <h3>🌐 HTTP Servers (REST API)</h3>
+        <span class="server-count">{{ getServersByType('http').length }} configurati</span>
+      </div>
+      
+      <div class="server-list">
+        <div *ngFor="let server of getServersByType('http'); trackBy: trackByServerId" 
+             class="server-card" [class.disabled]="!server.enabled">
+          
+          <div class="server-header">
+            <h4 class="server-name">{{ server.name }}</h4>
+            <div class="server-controls">
+              <button (click)="toggleServer(server)" 
+                      [class]="server.enabled ? 'btn-disable' : 'btn-enable'"
+                      [title]="server.enabled ? 'Disabilita server' : 'Abilita server'">
+                {{ server.enabled ? 'Disabilita' : 'Abilita' }}
+              </button>
+              <button (click)="editServer(server)" class="btn-edit" title="Modifica server">
+                Modifica
+              </button>
+              <button (click)="deleteServer(server.id!)" class="btn-delete" title="Elimina server">
+                Elimina
+              </button>
+            </div>
+          </div>
+          
+          <div class="server-info">
+            <div class="server-path">
+              <strong>URL:</strong> {{ server.url }}
+            </div>
+            <div class="server-path" *ngIf="server.tools_endpoint">
+              <strong>Tools Endpoint:</strong> {{ server.tools_endpoint }}
+            </div>
+            <div class="server-path">
+              <strong>Timeout:</strong> {{ server.timeout }}ms
+            </div>
+            <div *ngIf="server.priority" class="server-path">
+              <strong>Priorità:</strong> {{ server.priority }}
+            </div>
+            <div *ngIf="server.description" class="server-description">
+              {{ server.description }}
+            </div>
+          </div>
+        </div>
         
-        <div class="server-path" *ngIf="server.url">
-          <strong>URL:</strong> {{ server.url }}
+        <div *ngIf="getServersByType('http').length === 0" class="empty-section">
+          <p>Nessun HTTP server configurato</p>
         </div>
-        <div class="server-path" *ngIf="server.command">
-          <strong>Command:</strong> {{ server.command }} {{ server.args?.join(' ') }}
+      </div>
+    </div>
+
+    <!-- STDIO Servers -->
+    <div class="server-section">
+      <div class="section-header">
+        <h3>🔌 MCP STDIO Servers</h3>
+        <span class="server-count">{{ getServersByType('stdio').length }} configurati</span>
+      </div>
+      
+      <div class="server-list">
+        <div *ngFor="let server of getServersByType('stdio'); trackBy: trackByServerId" 
+             class="server-card" [class.disabled]="!server.enabled">
+          
+          <div class="server-header">
+            <h4 class="server-name">{{ server.name }}</h4>
+            <div class="server-controls">
+              <button (click)="toggleServer(server)" 
+                      [class]="server.enabled ? 'btn-disable' : 'btn-enable'"
+                      [title]="server.enabled ? 'Disabilita server' : 'Abilita server'">
+                {{ server.enabled ? 'Disabilita' : 'Abilita' }}
+              </button>
+              <button (click)="editServer(server)" class="btn-edit" title="Modifica server">
+                Modifica
+              </button>
+              <button (click)="deleteServer(server.id!)" class="btn-delete" title="Elimina server">
+                Elimina
+              </button>
+            </div>
+          </div>
+          
+          <div class="server-info">
+            <div class="server-path">
+              <strong>Comando:</strong> {{ server.command }} {{ server.args?.join(' ') }}
+            </div>
+            <div class="server-path">
+              <strong>Timeout:</strong> {{ server.timeout }}ms
+            </div>
+            <div *ngIf="server.description" class="server-description">
+              {{ server.description }}
+            </div>
+          </div>
         </div>
-        <div class="server-path">
-          <strong>Timeout:</strong> {{ server.timeout }}ms
-        </div>        <div *ngIf="server.description" style="margin-top: 8px; color: #86868b; font-size: 14px;">
-          {{ server.description }}
+        
+        <div *ngIf="getServersByType('stdio').length === 0" class="empty-section">
+          <p>Nessun MCP STDIO server configurato</p>
         </div>
       </div>
     </div>
   </div>
-    <!-- Form Aggiunta/Modifica Server -->
+
+  <!-- Bottone Aggiungi Server -->
+  <button (click)="addNewServer()" class="btn-add" *ngIf="!showForm">
+    ➕ Aggiungi Nuovo Server MCP
+  </button>
+
+  <!-- Form Aggiunta/Modifica Server -->
   <div class="server-form" *ngIf="showForm">
     <h3 class="form-title">{{ editingServer ? '✏️ Modifica Server' : '➕ Aggiungi Nuovo Server' }}</h3>
     
@@ -66,15 +174,18 @@
       </div>
       
       <div class="form-group">
-        <label>Tipo Server:</label>        <select [(ngModel)]="currentServer.type" 
+        <label>Tipo Server:</label>
+        <select [(ngModel)]="currentServer.type" 
                 name="type" 
                 (change)="onServerTypeChange()">
-          <option value="http">HTTP Server</option>
-          <option value="command">Command Server</option>
+          <option value="http">🌐 HTTP Server (REST API)</option>
+          <option value="stdio">🔌 MCP STDIO Server</option>
         </select>
-      </div>      
+      </div>
+      
       <!-- HTTP Server Fields -->
-      <div *ngIf="currentServer.type === 'http'" class="http-fields">        <div class="form-group">
+      <div *ngIf="currentServer.type === 'http'" class="http-fields">
+        <div class="form-group">
           <label>URL del Server:</label>
           <input [(ngModel)]="currentServer.url" 
                  name="url" 
@@ -91,8 +202,8 @@
         </div>
       </div>
       
-      <!-- Command Server Fields -->
-      <div *ngIf="currentServer.type === 'command'" class="command-fields">
+      <!-- STDIO Server Fields -->
+      <div *ngIf="currentServer.type === 'stdio'" class="command-fields">
         <div class="form-group">
           <label>Comando da Eseguire:</label>
           <input [(ngModel)]="currentServer.command" 
@@ -120,7 +231,8 @@
                max="60000"
                step="1000">
       </div>
-        <div class="form-group">
+      
+      <div class="form-group">
         <label>📝 Descrizione:</label>
         <textarea [(ngModel)]="currentServer.description" 
                   name="description" 
@@ -133,7 +245,8 @@
           <input type="checkbox" [(ngModel)]="currentServer.enabled" name="enabled" class="checkbox-input">
           <span class="checkbox-text">✅ Abilita Server Immediatamente</span>
         </label>
-      </div>      
+      </div>
+      
       <div class="form-actions">
         <button type="submit" class="btn-save">
           {{ editingServer ? '💾 Salva Modifiche' : '✨ Crea Server' }}
@@ -155,13 +268,42 @@
     <button (click)="testAllServers()" class="btn-test" [disabled]="servers.length === 0">
       🔄 Testa Tutti i Server ({{ servers.length }})
     </button>
-    
-    <div *ngIf="testResults.length > 0" class="test-results">
+      <div *ngIf="testResults.length > 0" class="test-results">
       <div *ngFor="let result of testResults" 
            class="test-result" [class]="result.success ? 'success' : 'error'">
-        <div class="test-server-name">{{ result.serverName }}</div>
+        <div class="test-server-info">
+          <span class="test-server-name">{{ result.serverName }}</span>
+          <span class="test-server-type">({{ result.serverType }})</span>
+          <span *ngIf="result.protocol" class="test-protocol">{{ result.protocol }}</span>
+        </div>
         <div class="test-message">
-          {{ result.success ? 'Connesso correttamente' : result.error }}
+          <span *ngIf="result.success" class="success-icon">✅</span>
+          <span *ngIf="!result.success" class="error-icon">❌</span>
+          {{ result.message || (result.success ? 'Connesso correttamente' : result.error) }}
+        </div>
+        <div *ngIf="result.warning" class="test-warning">
+          ⚠️ {{ result.warning }}
+        </div>
+        <div *ngIf="result.note" class="test-note">
+          💡 {{ result.note }}
+        </div>
+        <div class="test-details">
+          <span *ngIf="result.responseTime" class="test-time">
+            Tempo risposta: {{ result.responseTime }}ms
+          </span>
+          <span *ngIf="result.tools > 0" class="test-tools">
+            | {{ result.tools }} tool disponibili
+          </span>
+        </div>
+        <div *ngIf="result.toolsList && result.toolsList.length > 0" class="tools-list">
+          <details>
+            <summary>Tool disponibili ({{ result.toolsList.length }})</summary>
+            <ul>
+              <li *ngFor="let tool of result.toolsList">
+                <strong>{{ tool.name }}</strong>: {{ tool.description }}
+              </li>
+            </ul>
+          </details>
         </div>
       </div>
     </div>
