@@ -164,7 +164,7 @@ async function generateOptimizedQuery(params, threadId) {
         columnsInfo += `\nTable: ${tableName}\nColumns: ${tableInfo.columnNames.join(', ')}\n`;
       }
     }
-  }    const queryPrompt = `You are an expert SQL generator with access to the real database schema.
+  }  const queryPrompt = `You are an expert SQL generator with access to the real database schema.
 
 Database Schema:
 ${JSON.stringify(schema, null, 2)}
@@ -175,29 +175,39 @@ User Intent: "${userIntent}"
 Operation Type: ${operation.type}
 Operation Parameters: ${JSON.stringify(operation.parameters)}
 
+SEMANTIC ANALYSIS - Detect the user's true intent:
+1. If user asks for "che titoli" or "what titles" or "quali titoli" → They want DISTINCT values from Title column
+2. If user asks for "quanti" or "how many" → They want COUNT(*)
+3. If user asks for specific data/records → They want SELECT * with WHERE
+4. If user asks for preview/sample → They want SELECT * with LIMIT
+
+OPTIMIZATION RULES based on intent:
+- For DISTINCT VALUES (titles, names, categories): Use SELECT DISTINCT column_name FROM table ORDER BY column_name
+- For COUNTS: Use SELECT COUNT(*) or COUNT(DISTINCT column) 
+- For SEARCHES: Use SELECT * WITH WHERE conditions
+- For PREVIEWS: Use SELECT * WITH LIMIT
+
 Generate an optimized SQL query using the EXACT table and column names from the schema above.
 
 CRITICAL RULES:
 - Use ONLY existing tables and columns from the schema above
 - Use the EXACT column names as they appear in the "EXACT COLUMN NAMES" section above
 - Column names may contain underscores, double underscores, or special characters - use them exactly as shown
-- For searches, ALWAYS SELECT * to get all available data for rich analysis
-- For "universal title" searches, use "Univ__title" column in WHERE clause but SELECT *
+- OPTIMIZE based on the semantic analysis above
+- If user wants unique/distinct values, use SELECT DISTINCT on specific columns (more efficient)
+- If user wants counts, use COUNT(*) without unnecessary data transfer
+- If user wants to see data, use SELECT * for comprehensive analysis
 - NEVER use generic names like "dataset_column_name" or "table_column" - use real column names only
-- For preview operations, use SELECT * with LIMIT (default 20 for better statistics)
-- For searches, use proper WHERE conditions with LIKE and SELECT * for complete data
-- For counts, use COUNT(*) with appropriate GROUP BY if needed
-- If no specific table is mentioned but tables exist, use the main data table (typically "dataset")
 - Return only the SQL query, no explanations
 - DO NOT normalize or change column names
 
 Available tables: ${schema.tables.join(', ')}
 
-IMPORTANT: Unless specifically asked for only certain columns, ALWAYS use SELECT * to provide rich data for analysis including:
-- All available columns for comprehensive statistics
-- Dates for temporal analysis
-- Categories for grouping and counting
-- Text fields for content analysis
+EXAMPLES:
+- "che titoli ho" → SELECT DISTINCT Title FROM dataset ORDER BY Title
+- "quanti record" → SELECT COUNT(*) FROM dataset  
+- "mostra i dati" → SELECT * FROM dataset LIMIT 20
+- "trova Knight Rider" → SELECT * FROM dataset WHERE Title LIKE '%Knight Rider%'
 
 EXAMPLES:
 - Search query: SELECT * FROM dataset WHERE Univ__title LIKE '%Knight Rider%' LIMIT 20

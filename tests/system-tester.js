@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const EnhancedMcpClient = require('./enhanced-mcp-client');
+const EnhancedMcpClient = require('../enhanced-mcp-client');
 const fs = require('fs').promises;
 const path = require('path');
 
