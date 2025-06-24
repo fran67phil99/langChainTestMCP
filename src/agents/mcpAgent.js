@@ -6,7 +6,7 @@ const { runDataExplorerAgent } = require('./dataExplorerAgent');
 
 // Initialize LLM for MCP data processing with LangSmith tracing
 const llm = createTrackedLLM({
-  modelName: "gpt-3.5-turbo",
+  modelName: "gpt-4o-mini",
   temperature: 0.7,
 });
 

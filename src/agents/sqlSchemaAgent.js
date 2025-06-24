@@ -4,7 +4,7 @@ const { createTrackedLLM, logAgentActivity } = require('../utils/langsmithConfig
 
 // Initialize LLM for SQL operations with LangSmith tracing
 const llm = createTrackedLLM({
-  modelName: "gpt-3.5-turbo",
+  modelName: "gpt-4o-mini",
   temperature: 0.1, // Very low temperature for precise SQL generation
 });
 
@@ -63,35 +63,9 @@ async function runSqlSchemaAgent(request, availableTools, threadId) {
 async function discoverDatabaseSchema(availableTools, threadId) {
   console.log(`🔍 SQL Schema Agent: Discovering database schema...`);
   console.log(`🔧 Available tools: ${availableTools.map(t => t.name).join(', ')}`);
-  
-  try {// First, try to find and use any MCP tool that can list tables
-    const listTablesTool = availableTools.find(tool => {
-      const toolName = tool.name.toLowerCase();
-      const toolDesc = (tool.description || '').toLowerCase();
-      
-      // Look for table listing capabilities - prioritize exact matches
-      const tableListPatterns = [
-        'list_tables', 'listtables', 'list_table', 'table_list',
-        'show_tables', 'showtables', 'get_tables', 'gettables',
-        'describe_tables', 'schema', 'metadata'
-      ];
-      
-      // Exact name matches get highest priority
-      for (const pattern of tableListPatterns) {
-        if (toolName === pattern || toolName.includes(pattern)) {
-          return true;
-        }
-      }
-      
-      // Description matches get medium priority
-      for (const pattern of tableListPatterns) {
-        if (toolDesc.includes(pattern) && !toolDesc.includes('import') && !toolDesc.includes('upload')) {
-          return true;
-        }
-      }
-      
-      return false;
-    });
+    try {
+    // Use LLM to intelligently identify table listing tools
+    const listTablesTool = await findTableListingTool(availableTools);
       if (listTablesTool) {
       console.log(`🔧 Using MCP tool: ${listTablesTool.name} for schema discovery`);
       try {
@@ -102,9 +76,8 @@ async function discoverDatabaseSchema(availableTools, threadId) {
         if (tablesResult && (Array.isArray(tablesResult) || typeof tablesResult === 'object')) {
           const tables = parseTablesFromMcpResult(tablesResult);
           console.log(`📋 Found tables via MCP tool: ${tables.join(', ')}`);
-          
-          // Get detailed schema for each table using database tool
-          const dbTool = findDatabaseTool(availableTools);
+            // Get detailed schema for each table using database tool
+          const dbTool = await findDatabaseTool(availableTools);
           const detailedSchema = dbTool ? await getDetailedSchema(tables, dbTool) : {};
           
           logAgentActivity('sql_schema_agent', 'schema_discovered', {
@@ -130,61 +103,23 @@ async function discoverDatabaseSchema(availableTools, threadId) {
         console.log(`⚠️ MCP table listing tool failed: ${error.message}, trying SQL queries...`);
       }
     }
-    
-    // Fallback: Find database tools and try SQL queries
-    const dbTool = findDatabaseTool(availableTools);
+      // Fallback: Find database tools and try intelligent SQL schema discovery
+    const dbTool = await findDatabaseTool(availableTools);
     if (!dbTool) {
       throw new Error('No database tools available for schema discovery');
     }
-      // Try multiple database systems and query types dynamically
-    const schemaQueries = [
-      // SQLite
-      "SELECT name FROM sqlite_master WHERE type='table'",
-      "PRAGMA table_list",
-      ".tables",
-      // MySQL/MariaDB
-      "SHOW TABLES",
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()",
-      // PostgreSQL
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",
-      "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
-      // SQL Server
-      "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'",
-      "SELECT name FROM sys.tables",
-      // Oracle
-      "SELECT table_name FROM user_tables",
-      // Generic ANSI SQL
-      "SELECT table_name FROM information_schema.tables",
-      // MongoDB-style (if supported)
-      "show collections",
-      // Generic fallback
-      "SELECT * FROM information_schema.tables LIMIT 10"
-    ];
+
+    // Use LLM to determine appropriate schema discovery queries based on the tool description
+    const schemaResult = await discoverSchemaIntelligently(dbTool);
     
-    let tablesResult = null;
-    let workingQuery = null;
-    
-    // Try each query until one works
-    for (const query of schemaQueries) {
-      try {
-        console.log(`🔍 Trying schema query: ${query}`);
-        tablesResult = await dbTool.call({ query });
-        workingQuery = query;
-        break;
-      } catch (error) {
-        console.log(`⚠️ Schema query failed: ${error.message}`);
-        continue;
-      }
+    if (!schemaResult.success) {
+      throw new Error('Unable to discover database schema with intelligent methods');
     }
     
-    if (!tablesResult) {
-      throw new Error('Unable to discover database schema with any known method');
-    }
-    
-    console.log(`✅ Schema discovery successful with: ${workingQuery}`);
+    console.log(`✅ Schema discovery successful with intelligent method`);
     
     // Parse table names from result
-    const tables = parseTableNames(tablesResult);
+    const tables = parseTableNames(schemaResult.data);
     console.log(`📋 Found tables: ${tables.join(', ')}`);
     
     // Get detailed schema for each table
@@ -193,7 +128,7 @@ async function discoverDatabaseSchema(availableTools, threadId) {
     logAgentActivity('sql_schema_agent', 'schema_discovered', {
       tablesFound: tables.length,
       tables: tables,
-      method: workingQuery,
+      method: 'intelligent_llm_based',
       threadId
     });
     
@@ -204,7 +139,7 @@ async function discoverDatabaseSchema(availableTools, threadId) {
       schema: {
         tables: tables,
         detailed: detailedSchema,
-        discoveryMethod: workingQuery
+        discoveryMethod: 'intelligent_llm_based'
       },
       tool: dbTool.name
     };
@@ -229,8 +164,7 @@ async function generateOptimizedQuery(params, threadId) {
         columnsInfo += `\nTable: ${tableName}\nColumns: ${tableInfo.columnNames.join(', ')}\n`;
       }
     }
-  }
-    const queryPrompt = `You are an expert SQL generator with access to the real database schema.
+  }    const queryPrompt = `You are an expert SQL generator with access to the real database schema.
 
 Database Schema:
 ${JSON.stringify(schema, null, 2)}
@@ -247,52 +181,37 @@ CRITICAL RULES:
 - Use ONLY existing tables and columns from the schema above
 - Use the EXACT column names as they appear in the "EXACT COLUMN NAMES" section above
 - Column names may contain underscores, double underscores, or special characters - use them exactly as shown
-- For text searches (like "Back to the Future"), look for title/name columns like "Univ__title", "Title", etc.
+- For searches, ALWAYS SELECT * to get all available data for rich analysis
+- For "universal title" searches, use "Univ__title" column in WHERE clause but SELECT *
 - NEVER use generic names like "dataset_column_name" or "table_column" - use real column names only
-- For "universal title" or similar terms, use "Univ__title" column if available
-- For preview operations, use appropriate LIMIT (default 10)
-- For searches, use proper WHERE conditions with LIKE
+- For preview operations, use SELECT * with LIMIT (default 20 for better statistics)
+- For searches, use proper WHERE conditions with LIKE and SELECT * for complete data
 - For counts, use COUNT(*) with appropriate GROUP BY if needed
-- If no specific table is mentioned in user intent but tables exist, use the first available table
+- If no specific table is mentioned but tables exist, use the main data table (typically "dataset")
 - Return only the SQL query, no explanations
 - DO NOT normalize or change column names
 
 Available tables: ${schema.tables.join(', ')}
 
-EXAMPLE: If searching for "Back to the Future" in universal titles, use:
-SELECT * FROM dataset WHERE Univ__title LIKE '%Back to the Future%'
+IMPORTANT: Unless specifically asked for only certain columns, ALWAYS use SELECT * to provide rich data for analysis including:
+- All available columns for comprehensive statistics
+- Dates for temporal analysis
+- Categories for grouping and counting
+- Text fields for content analysis
+
+EXAMPLES:
+- Search query: SELECT * FROM dataset WHERE Univ__title LIKE '%Knight Rider%' LIMIT 20
+- Preview query: SELECT * FROM dataset LIMIT 20
+- Count query: SELECT COUNT(*), column_name FROM dataset GROUP BY column_name
 
 SQL Query:`;
 
   try {
     const response = await llm.invoke([new HumanMessage(queryPrompt)]);
-    let sqlQuery = response.content.trim();
-      // Clean up the response
+    let sqlQuery = response.content.trim();// Clean up the response
     sqlQuery = sqlQuery.replace(/```sql\n?/g, '').replace(/```\n?/g, '').trim();
     
-    // Fix common LLM mistakes with column names
-    if (schema.detailed) {
-      for (const [tableName, tableInfo] of Object.entries(schema.detailed)) {
-        if (tableInfo.columnNames && tableInfo.columnNames.length > 0) {
-          // Replace generic column references with actual columns
-          if (sqlQuery.includes('dataset_column_name') || sqlQuery.includes('table_column')) {
-            // For title/name searches, prioritize Univ__title, Title, or name-like columns
-            const titleColumn = tableInfo.columnNames.find(col => 
-              col.toLowerCase().includes('title') || 
-              col.toLowerCase().includes('univ') ||
-              col.toLowerCase().includes('name')
-            ) || tableInfo.columnNames[0]; // fallback to first column
-            
-            sqlQuery = sqlQuery.replace(/dataset_column_name|table_column/g, titleColumn);
-          }
-          
-          // Replace generic table references
-          sqlQuery = sqlQuery.replace(/table_name/g, tableName);
-        }
-      }
-    }
-    
-    // If query still contains generic placeholders, replace with actual table
+    // If query still contains generic placeholders, use LLM to fix them intelligently
     if (sqlQuery.includes('table_name') && schema.tables.length > 0) {
       sqlQuery = sqlQuery.replace(/table_name/g, schema.tables[0]);
     }
@@ -350,59 +269,166 @@ async function validateQuery(params, threadId) {
 }
 
 /**
- * Helper functions
+ * Helper functions - completely dynamic and LLM-based
  */
-function findDatabaseTool(availableTools) {
-  // Priority-based search for database tools - completely dynamic
-  const dbToolPatterns = [
-    { patterns: ['query_database', 'database_query', 'sql_query'], priority: 10 },
-    { patterns: ['query', 'sql'], priority: 9 },
-    { patterns: ['database', 'db'], priority: 8 },
-    { patterns: ['exec', 'execute', 'run'], priority: 7 },
-    { patterns: ['select', 'insert', 'update', 'delete'], priority: 6 },
-    { patterns: ['call', 'invoke'], priority: 5 }
-  ];
+
+/**
+ * Use LLM to intelligently find table listing tools
+ */
+async function findTableListingTool(availableTools) {
+  if (availableTools.length === 0) return null;
   
-  let bestTool = null;
-  let bestScore = 0;
-  
-  for (const tool of availableTools) {
-    const toolName = tool.name.toLowerCase();
-    const toolDesc = (tool.description || '').toLowerCase();
-    let score = 0;
+  const toolAnalysisPrompt = `You are an expert at analyzing tools for database operations. 
+
+Available tools:
+${availableTools.map(tool => `- ${tool.name}: ${tool.description || 'No description'}`).join('\n')}
+
+Identify which tool (if any) can list database tables or schema information. 
+Consider tools that might:
+- List tables in a database
+- Show database schema
+- Provide table metadata
+- Execute SQL queries to discover tables
+
+Respond with ONLY the exact tool name from the list above, or "NONE" if no suitable tool exists.
+Do not include any other text or explanation.`;
+
+  try {
+    const response = await llm.invoke([new HumanMessage(toolAnalysisPrompt)]);
+    const toolName = response.content.trim();
     
-    // Skip tools that are clearly not for database queries
-    if (toolName.includes('import') || toolName.includes('upload') || 
-        toolName.includes('export') || toolName.includes('file')) {
-      continue;
+    if (toolName === 'NONE') {
+      return null;
     }
     
-    // Calculate score based on pattern matching
-    for (const { patterns, priority } of dbToolPatterns) {
-      for (const pattern of patterns) {
-        if (toolName.includes(pattern)) {
-          score += priority * 2; // Name matches get double weight
-        }
-        if (toolDesc.includes(pattern)) {
-          score += priority;
+    const selectedTool = availableTools.find(tool => tool.name === toolName);
+    if (selectedTool) {
+      console.log(`🎯 LLM selected table listing tool: ${selectedTool.name}`);
+      return selectedTool;
+    }
+    
+    return null;
+  } catch (error) {
+    console.log(`⚠️ LLM tool analysis failed: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Use LLM to intelligently find database query tools
+ */
+async function findDatabaseTool(availableTools) {
+  if (availableTools.length === 0) return null;
+  
+  const toolAnalysisPrompt = `You are an expert at analyzing tools for database operations.
+
+Available tools:
+${availableTools.map(tool => `- ${tool.name}: ${tool.description || 'No description'}`).join('\n')}
+
+Identify which tool can execute SQL queries or database operations.
+Consider tools that might:
+- Execute SQL queries
+- Query databases
+- Run database commands
+- Access database data
+
+Respond with ONLY the exact tool name from the list above, or "NONE" if no suitable tool exists.
+Do not include any other text or explanation.`;
+
+  try {
+    const response = await llm.invoke([new HumanMessage(toolAnalysisPrompt)]);
+    const toolName = response.content.trim();
+    
+    if (toolName === 'NONE') {
+      return null;
+    }
+    
+    const selectedTool = availableTools.find(tool => tool.name === toolName);
+    if (selectedTool) {
+      console.log(`🎯 LLM selected database tool: ${selectedTool.name}`);
+      return selectedTool;
+    }
+    
+    return null;
+  } catch (error) {
+    console.log(`⚠️ LLM database tool analysis failed: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Use LLM to intelligently discover database schema
+ */
+async function discoverSchemaIntelligently(dbTool) {
+  const schemaDiscoveryPrompt = `You are an expert database administrator. You need to discover the schema of a database using the available tool: ${dbTool.name}.
+
+Tool description: ${dbTool.description || 'Database query tool'}
+
+Generate a SQL query to list all tables in the database. This database could be any type (SQLite, MySQL, PostgreSQL, SQL Server, etc.).
+
+IMPORTANT: Try the most common approaches in this order:
+1. SQLite: SELECT name FROM sqlite_master WHERE type='table'
+2. MySQL: SHOW TABLES  
+3. PostgreSQL: SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+4. Generic: SELECT table_name FROM information_schema.tables
+
+Start with SQLite syntax as it's very common in development environments.
+
+Respond with ONLY the SQL query, no explanations or additional text.`;
+
+  try {
+    const response = await llm.invoke([new HumanMessage(schemaDiscoveryPrompt)]);
+    const query = response.content.trim().replace(/```sql\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    console.log(`🔍 LLM generated schema discovery query: ${query}`);
+    
+    // Try the LLM-generated query
+    try {
+      const result = await dbTool.call({ query });
+      return { success: true, data: result, query: query };
+    } catch (error) {
+      console.log(`⚠️ LLM-generated query failed: ${error.message}`);
+      
+      // If first attempt fails, try SQLite approach specifically
+      if (!query.toLowerCase().includes('sqlite_master')) {
+        console.log(`🔄 Trying SQLite-specific approach...`);
+        const sqliteQuery = "SELECT name FROM sqlite_master WHERE type='table'";
+        
+        try {
+          const sqliteResult = await dbTool.call({ query: sqliteQuery });
+          return { success: true, data: sqliteResult, query: sqliteQuery };
+        } catch (sqliteError) {
+          console.log(`⚠️ SQLite query also failed: ${sqliteError.message}`);
         }
       }
+      
+      // Ask LLM for alternative approach with error context
+      const fallbackPrompt = `The query "${query}" failed with error: ${error.message}
+
+This suggests the database might be SQLite. Generate an alternative SQL query to list tables.
+
+For SQLite, use: SELECT name FROM sqlite_master WHERE type='table'
+For other databases, try a different approach.
+
+Respond with ONLY the SQL query, no explanations.`;
+
+      const fallbackResponse = await llm.invoke([new HumanMessage(fallbackPrompt)]);
+      const fallbackQuery = fallbackResponse.content.trim().replace(/```sql\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      console.log(`🔍 LLM generated fallback query: ${fallbackQuery}`);
+      
+      try {
+        const fallbackResult = await dbTool.call({ query: fallbackQuery });
+        return { success: true, data: fallbackResult, query: fallbackQuery };
+      } catch (fallbackError) {
+        console.log(`⚠️ Fallback query also failed: ${fallbackError.message}`);
+        return { success: false, error: fallbackError.message };
+      }
     }
-    
-    // Bonus for tools that explicitly mention SQL or database operations
-    if (toolDesc.includes('sql') || toolDesc.includes('database') || 
-        toolDesc.includes('query') || toolDesc.includes('execute')) {
-      score += 5;
-    }
-    
-    if (score > bestScore) {
-      bestScore = score;
-      bestTool = tool;
-    }
+  } catch (error) {
+    console.log(`⚠️ LLM schema discovery failed: ${error.message}`);
+    return { success: false, error: error.message };
   }
-  
-  console.log(`🎯 SQL Schema Agent: Selected database tool: ${bestTool?.name || 'none'} (score: ${bestScore})`);
-  return bestTool;
 }
 
 function parseTablesFromMcpResult(mcpResult) {
@@ -507,6 +533,33 @@ function parseTablesFromMcpResult(mcpResult) {
 }
 
 function parseTableNames(tablesResult) {
+  console.log(`🔍 Parsing table names from result:`, tablesResult);
+  
+  // Handle MCP response format with content array
+  if (tablesResult && tablesResult.content && Array.isArray(tablesResult.content)) {
+    for (const contentItem of tablesResult.content) {
+      if (contentItem.type === 'text' && contentItem.text) {
+        try {
+          const parsedData = JSON.parse(contentItem.text);
+          console.log(`📋 Parsed JSON from MCP response:`, parsedData);
+          
+          // Handle successful data response with rows
+          if (parsedData.success && parsedData.data && parsedData.data.rows && Array.isArray(parsedData.data.rows)) {
+            const tables = parsedData.data.rows.map(row => row.name).filter(Boolean);
+            console.log(`📋 Extracted table names from rows:`, tables);
+            return tables;
+          }
+          
+          // Handle other possible structures
+          return parseTableNames(parsedData);
+        } catch (error) {
+          console.log(`⚠️ Failed to parse JSON from MCP response: ${error.message}`);
+        }
+      }
+    }
+  }
+  
+  // Handle direct array result (typical for PRAGMA table_info, DESCRIBE, etc.)
   if (Array.isArray(tablesResult)) {
     // Extract table names from array of objects
     return tablesResult.map(row => {
@@ -518,11 +571,29 @@ function parseTableNames(tablesResult) {
     }).filter(Boolean);
   }
   
+  // Handle direct object with data structure
+  if (typeof tablesResult === 'object' && tablesResult !== null) {
+    // Check for data.rows structure (MCP format)
+    if (tablesResult.data && tablesResult.data.rows && Array.isArray(tablesResult.data.rows)) {
+      const tables = tablesResult.data.rows.map(row => row.name).filter(Boolean);
+      console.log(`📋 Extracted table names from direct data.rows:`, tables);
+      return tables;
+    }
+    
+    // Check for direct rows array
+    if (tablesResult.rows && Array.isArray(tablesResult.rows)) {
+      const tables = tablesResult.rows.map(row => row.name).filter(Boolean);
+      console.log(`📋 Extracted table names from direct rows:`, tables);
+      return tables;
+    }
+  }
+  
   if (typeof tablesResult === 'string') {
     // Parse string response
     return tablesResult.split('\n').filter(line => line.trim());
   }
   
+  console.log(`⚠️ Could not parse table names from result format`);
   return [];
 }
 
@@ -533,140 +604,49 @@ async function getDetailedSchema(tables, dbTool) {
     try {
       console.log(`🔍 Getting detailed schema for table: ${table}`);
       
-      // Try multiple approaches to get schema information
-      let tableInfo = null;
+      // Use LLM to generate appropriate schema query for this table
+      const schemaQuery = await generateSchemaQueryForTable(table, dbTool);
       
-      // Approach 1: PRAGMA table_info (SQLite specific)
-      try {
-        const schemaQuery = `PRAGMA table_info(${table})`;
-        tableInfo = await dbTool.call({ query: schemaQuery });
-        console.log(`📋 PRAGMA table_info result for ${table}:`, tableInfo);
-        
-        if (tableInfo && Array.isArray(tableInfo) && tableInfo.length > 0) {
-          detailed[table] = {
-            method: 'PRAGMA table_info',
-            columns: tableInfo,
-            columnCount: tableInfo.length,
-            columnNames: tableInfo.map(col => col.name).filter(Boolean)
-          };
-          console.log(`✅ Got ${tableInfo.length} columns via PRAGMA for table: ${table}`);
-          continue; // Success, move to next table
-        }
-      } catch (error) {
-        console.log(`⚠️ PRAGMA table_info failed for ${table}: ${error.message}`);
-      }
-      
-      // Approach 2: DESCRIBE table (MySQL/PostgreSQL style)
-      try {
-        const describeQuery = `DESCRIBE ${table}`;
-        tableInfo = await dbTool.call({ query: describeQuery });
-        console.log(`📋 DESCRIBE result for ${table}:`, tableInfo);
-        
-        if (tableInfo && Array.isArray(tableInfo) && tableInfo.length > 0) {
-          detailed[table] = {
-            method: 'DESCRIBE',
-            columns: tableInfo,
-            columnCount: tableInfo.length,
-            columnNames: tableInfo.map(col => col.Field || col.field || col.column_name).filter(Boolean)
-          };
-          console.log(`✅ Got ${tableInfo.length} columns via DESCRIBE for table: ${table}`);
-          continue; // Success, move to next table
-        }
-      } catch (error) {
-        console.log(`⚠️ DESCRIBE failed for ${table}: ${error.message}`);
-      }
-      
-      // Approach 3: information_schema (ANSI SQL standard)
-      try {
-        const infoSchemaQuery = `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${table}' ORDER BY ordinal_position`;
-        tableInfo = await dbTool.call({ query: infoSchemaQuery });
-        console.log(`📋 information_schema result for ${table}:`, tableInfo);
-        
-        if (tableInfo && Array.isArray(tableInfo) && tableInfo.length > 0) {
-          detailed[table] = {
-            method: 'information_schema',
-            columns: tableInfo,
-            columnCount: tableInfo.length,
-            columnNames: tableInfo.map(col => col.column_name || col.COLUMN_NAME).filter(Boolean)
-          };
-          console.log(`✅ Got ${tableInfo.length} columns via information_schema for table: ${table}`);
-          continue; // Success, move to next table
-        }
-      } catch (error) {
-        console.log(`⚠️ information_schema failed for ${table}: ${error.message}`);
-      }
-        // Approach 4: Sample data approach - SELECT first row to discover columns
-      try {
-        const sampleQuery = `SELECT * FROM ${table} LIMIT 1`;
-        const sampleData = await dbTool.call({ query: sampleQuery });
-        console.log(`📋 Sample data result for ${table}:`, sampleData);
-        
-        // Extract columns from MCP result structure
-        let columnNames = [];
-        
-        if (sampleData && typeof sampleData === 'object') {
-          // Try to parse from MCP response format
-          if (sampleData.content && Array.isArray(sampleData.content) && sampleData.content[0]) {
-            try {
-              const textContent = sampleData.content[0].text;
-              const parsedData = JSON.parse(textContent);
-              
-              if (parsedData.success && parsedData.data && parsedData.data.columns) {
-                columnNames = parsedData.data.columns;
-                console.log(`📋 Extracted columns from MCP response: ${columnNames.join(', ')}`);
-              }
-            } catch (parseError) {
-              console.log(`⚠️ Could not parse MCP response JSON: ${parseError.message}`);
-            }
-          }
-          
-          // Fallback: try direct array access
-          if (columnNames.length === 0 && Array.isArray(sampleData) && sampleData.length > 0) {
-            const firstRow = sampleData[0];
-            if (typeof firstRow === 'object' && firstRow !== null) {
-              columnNames = Object.keys(firstRow);
-              console.log(`📋 Extracted columns from first row keys: ${columnNames.join(', ')}`);
-            }
-          }
-        }
-        
-        if (columnNames.length > 0) {
-          detailed[table] = {
-            method: 'sample_data_discovery',
-            columnCount: columnNames.length,
-            columnNames: columnNames,
-            discoveredFrom: 'mcp_response_columns'
-          };
-          console.log(`✅ Got ${columnNames.length} columns via sample data for table: ${table}`);
-          console.log(`📋 Column names: ${columnNames.join(', ')}`);
-          continue; // Success, move to next table
-        }
-      } catch (error) {
-        console.log(`⚠️ Sample data approach failed for ${table}: ${error.message}`);
-      }
-      
-      // Approach 5: Count rows to at least get table size info
-      try {
-        const countQuery = `SELECT COUNT(*) as row_count FROM ${table}`;
-        const countResult = await dbTool.call({ query: countQuery });
-        console.log(`📋 Count result for ${table}:`, countResult);
-        
-        if (countResult && Array.isArray(countResult) && countResult.length > 0) {
-          const rowCount = countResult[0].row_count || countResult[0]['COUNT(*)'] || 0;
-          detailed[table] = {
-            method: 'count_only',
-            rowCount: rowCount,
-            error: 'Could not discover column schema, but table exists',
-            columnCount: 'unknown'
-          };
-          console.log(`⚠️ Could only get row count (${rowCount}) for table: ${table}`);
-        }
-      } catch (error) {
-        console.log(`⚠️ Even count query failed for ${table}: ${error.message}`);
+      if (!schemaQuery) {
+        console.log(`⚠️ Could not generate schema query for table: ${table}`);
         detailed[table] = { 
-          error: `All schema discovery methods failed: ${error.message}`,
+          error: 'Could not generate appropriate schema query',
           method: 'failed'
         };
+        continue;
+      }
+      
+      try {
+        console.log(`🔍 Executing schema query for ${table}: ${schemaQuery}`);
+        const schemaResult = await dbTool.call({ query: schemaQuery });
+        console.log(`📋 Schema result for ${table}:`, schemaResult);
+        
+        // Parse the schema result intelligently
+        const parsedSchema = parseSchemaResult(schemaResult, table);
+        
+        if (parsedSchema.success) {
+          detailed[table] = parsedSchema;
+          console.log(`✅ Got schema for table: ${table} (${parsedSchema.columnCount} columns)`);
+        } else {
+          // Fallback: try sample data approach
+          const sampleResult = await getSampleDataSchema(table, dbTool);
+          detailed[table] = sampleResult;
+        }
+        
+      } catch (error) {
+        console.log(`⚠️ Schema query failed for ${table}: ${error.message}`);
+        
+        // Fallback: try sample data approach
+        try {
+          const sampleResult = await getSampleDataSchema(table, dbTool);
+          detailed[table] = sampleResult;
+        } catch (sampleError) {
+          console.log(`❌ All schema discovery methods failed for ${table}: ${sampleError.message}`);
+          detailed[table] = { 
+            error: `Schema discovery failed: ${error.message}`,
+            method: 'failed'
+          };
+        }
       }
       
     } catch (error) {
@@ -679,6 +659,167 @@ async function getDetailedSchema(tables, dbTool) {
   }
   
   return detailed;
+}
+
+/**
+ * Use LLM to generate appropriate schema query for a specific table
+ */
+async function generateSchemaQueryForTable(tableName, dbTool) {
+  const schemaQueryPrompt = `You are a database expert. Generate a SQL query to get the column information for table "${tableName}".
+
+Tool available: ${dbTool.name}
+Tool description: ${dbTool.description || 'Database query tool'}
+
+Consider different database systems and generate the most appropriate query to get column names and types.
+
+Common approaches:
+- PRAGMA table_info(${tableName}) -- SQLite
+- DESCRIBE ${tableName} -- MySQL
+- SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${tableName}' -- PostgreSQL/SQL Server
+- SELECT * FROM ${tableName} LIMIT 1 -- Sample data approach
+
+Respond with ONLY the SQL query, no explanations.`;
+
+  try {
+    const response = await llm.invoke([new HumanMessage(schemaQueryPrompt)]);
+    const query = response.content.trim().replace(/```sql\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    console.log(`🔍 LLM generated schema query for ${tableName}: ${query}`);
+    return query;
+  } catch (error) {
+    console.log(`⚠️ LLM schema query generation failed: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Intelligently parse schema result from any database system
+ */
+function parseSchemaResult(schemaResult, tableName) {
+  try {
+    // Handle MCP response format
+    if (schemaResult && schemaResult.content && Array.isArray(schemaResult.content)) {
+      for (const contentItem of schemaResult.content) {
+        if (contentItem.type === 'text' && contentItem.text) {
+          try {
+            const parsedData = JSON.parse(contentItem.text);
+            if (parsedData.success && parsedData.data && parsedData.data.columns) {
+              return {
+                success: true,
+                method: 'mcp_columns_data',
+                columnNames: parsedData.data.columns,
+                columnCount: parsedData.data.columns.length
+              };
+            }
+          } catch (parseError) {
+            // Continue with other parsing methods
+          }
+        }
+      }
+    }
+    
+    // Handle direct array result (typical for PRAGMA table_info, DESCRIBE, etc.)
+    if (Array.isArray(schemaResult) && schemaResult.length > 0) {
+      const firstRow = schemaResult[0];
+      
+      // PRAGMA table_info format: {cid, name, type, notnull, dflt_value, pk}
+      if (firstRow.name !== undefined) {
+        const columnNames = schemaResult.map(row => row.name);
+        return {
+          success: true,
+          method: 'pragma_table_info',
+          columns: schemaResult,
+          columnNames: columnNames,
+          columnCount: columnNames.length
+        };
+      }
+      
+      // DESCRIBE format: {Field, Type, Null, Key, Default, Extra}
+      if (firstRow.Field !== undefined) {
+        const columnNames = schemaResult.map(row => row.Field);
+        return {
+          success: true,
+          method: 'describe_table',
+          columns: schemaResult,
+          columnNames: columnNames,
+          columnCount: columnNames.length
+        };
+      }
+      
+      // information_schema format: {column_name, data_type, ...}
+      if (firstRow.column_name !== undefined) {
+        const columnNames = schemaResult.map(row => row.column_name);
+        return {
+          success: true,
+          method: 'information_schema',
+          columns: schemaResult,
+          columnNames: columnNames,
+          columnCount: columnNames.length
+        };
+      }
+      
+      // Sample data format: extract keys from first row
+      if (typeof firstRow === 'object' && firstRow !== null) {
+        const columnNames = Object.keys(firstRow);
+        return {
+          success: true,
+          method: 'sample_data_keys',
+          sampleRow: firstRow,
+          columnNames: columnNames,
+          columnCount: columnNames.length
+        };
+      }
+    }
+    
+    return { success: false, error: 'Could not parse schema result format' };
+  } catch (error) {
+    return { success: false, error: `Schema parsing failed: ${error.message}` };
+  }
+}
+
+/**
+ * Fallback method: get schema from sample data
+ */
+async function getSampleDataSchema(tableName, dbTool) {
+  try {
+    const sampleQuery = `SELECT * FROM ${tableName} LIMIT 1`;
+    const sampleData = await dbTool.call({ query: sampleQuery });
+    
+    const parsedSample = parseSchemaResult(sampleData, tableName);
+    
+    if (parsedSample.success) {
+      return {
+        ...parsedSample,
+        method: 'sample_data_fallback'
+      };
+    } else {
+      // Last resort: count rows to verify table exists
+      const countQuery = `SELECT COUNT(*) as row_count FROM ${tableName}`;
+      const countResult = await dbTool.call({ query: countQuery });
+      
+      if (countResult && Array.isArray(countResult) && countResult.length > 0) {
+        const rowCount = countResult[0].row_count || countResult[0]['COUNT(*)'] || 0;
+        return {
+          success: false,
+          method: 'count_only_fallback',
+          rowCount: rowCount,
+          error: 'Could not discover column schema, but table exists with ' + rowCount + ' rows'
+        };
+      }
+    }
+    
+    return { 
+      success: false,
+      method: 'failed',
+      error: 'All fallback methods failed'
+    };
+  } catch (error) {
+    return { 
+      success: false,
+      method: 'failed',
+      error: `Sample data schema failed: ${error.message}`
+    };
+  }
 }
 
 module.exports = {

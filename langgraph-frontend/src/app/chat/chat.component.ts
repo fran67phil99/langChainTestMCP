@@ -89,13 +89,11 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
           this.addMessage('Connessione persa. Tentativo di riconnessione...', false);
         }
       }
-    });
-
-    // Subscribe to regular messages
+    });    // Subscribe to regular messages
     this.websocketService.getMessages().subscribe(async (messageData) => {
       this.isTyping = false;
       
-      // Complete processing for current message
+      // Complete processing for current message with translated logs support
       if (this.currentProcessingMessageId) {
         await this.completeProcessingMessage(this.currentProcessingMessageId, messageData);
       } else {
@@ -238,8 +236,7 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
     
     this.messages.push(processingMessage);
     this.currentProcessingMessageId = messageId;
-  }
-  private async completeProcessingMessage(messageId: string, messageData: any): Promise<void> {
+  }  private async completeProcessingMessage(messageId: string, messageData: any): Promise<void> {
     const message = this.messages.find(msg => msg.id === messageId);
     if (!message || !message.isProcessing) return;
 
@@ -258,6 +255,13 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
     message.isProcessing = false;
     message.content = responseContent;
     
+    // FASE CRITICA: Usa i log tradotti se disponibili
+    if (messageData.translatedLogs && Array.isArray(messageData.translatedLogs)) {
+      console.log(`🌍 Using translated logs (${messageData.detectedLanguage}):`, messageData.translatedLogs.length);
+      message.progressLogs = messageData.translatedLogs;
+      message.processLanguage = messageData.detectedLanguage || 'it';
+    }
+    
     // Process markdown for the response
     try {
       const htmlContent = await marked(responseContent);
@@ -266,6 +270,8 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       console.error('Errore nel parsing markdown:', error);
       message.htmlContent = this.sanitizer.bypassSecurityTrustHtml(responseContent);
     }
+    
+    console.log(`✅ Processing message completed. Language: ${message.processLanguage}, Logs: ${message.progressLogs?.length || 0}`);
     
     this.currentProcessingMessageId = null;
   }
@@ -414,19 +420,100 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       second: '2-digit'
     });
   }
-
   getLogStepName(step: string): string {
-    const stepNames: { [key: string]: string } = {
-      'received': '📨 Ricevuto',
-      'language_detection': '🌐 Lingua',
-      'orchestrator_start': '🚀 Orchestratore',
-      'language_processing': '🔍 Analisi Linguistica',
-      'agent_routing': '🎯 Routing Agente',
-      'agent_selected': '🤖 Agente Selezionato',
-      'agent_executing': '⚙️ Esecuzione',
-      'processing_complete': '✅ Completato'
+    // Supporto multilingue per i nomi dei step
+    const stepNames: { [key: string]: { [lang: string]: string } } = {
+      'received': {
+        'it': '📨 Ricevuto',
+        'en': '📨 Received',
+        'fr': '📨 Reçu',
+        'es': '📨 Recibido',
+        'de': '📨 Empfangen'
+      },
+      'language_detection': {
+        'it': '🌐 Rilevamento Lingua',
+        'en': '🌐 Language Detection',
+        'fr': '🌐 Détection Langue',
+        'es': '📨 Detección Idioma',
+        'de': '🌐 Spracherkennung'
+      },
+      'orchestrator_start': {
+        'it': '🚀 Avvio Orchestratore',
+        'en': '🚀 Starting Orchestrator',
+        'fr': '🚀 Démarrage Orchestrateur',
+        'es': '🚀 Iniciando Orquestador',
+        'de': '🚀 Orchestrator Start'
+      },
+      'language_processing': {
+        'it': '🔍 Analisi Linguistica',
+        'en': '🔍 Language Analysis',
+        'fr': '🔍 Analyse Linguistique',
+        'es': '🔍 Análisis Lingüístico',
+        'de': '🔍 Sprachanalyse'
+      },
+      'agent_routing': {
+        'it': '🎯 Selezione Agente',
+        'en': '🎯 Agent Selection',
+        'fr': '🎯 Sélection Agent',
+        'es': '🎯 Selección Agente',
+        'de': '🎯 Agenten-Auswahl'
+      },
+      'agent_selected': {
+        'it': '🤖 Agente Selezionato',
+        'en': '🤖 Agent Selected',
+        'fr': '🤖 Agent Sélectionné',
+        'es': '🤖 Agente Seleccionado',
+        'de': '🤖 Agent Ausgewählt'
+      },
+      'agent_executing': {
+        'it': '⚙️ Esecuzione Agente',
+        'en': '⚙️ Agent Executing',
+        'fr': '⚙️ Exécution Agent',
+        'es': '⚙️ Ejecutando Agente',
+        'de': '⚙️ Agent Ausführung'
+      },
+      'processing_complete': {
+        'it': '✅ Elaborazione Completata',
+        'en': '✅ Processing Complete',
+        'fr': '✅ Traitement Terminé',
+        'es': '✅ Procesamiento Completo',
+        'de': '✅ Verarbeitung Abgeschlossen'
+      },
+      // A2A Operations
+      'a2a_schema_discovery': {
+        'it': '🔍 A2A: Scoperta Schema',
+        'en': '🔍 A2A: Schema Discovery',
+        'fr': '🔍 A2A: Découverte Schéma',
+        'es': '🔍 A2A: Descubrimiento Esquema',
+        'de': '🔍 A2A: Schema-Erkennung'
+      },
+      'a2a_query_generation': {
+        'it': '📝 A2A: Generazione Query',
+        'en': '📝 A2A: Query Generation',
+        'fr': '📝 A2A: Génération Requête',
+        'es': '📝 A2A: Generación Consulta',
+        'de': '📝 A2A: Abfrage-Generierung'
+      },
+      'a2a_delegation': {
+        'it': '↗️ A2A: Delegazione Task',
+        'en': '↗️ A2A: Task Delegation',
+        'fr': '↗️ A2A: Délégation Tâche',
+        'es': '↗️ A2A: Delegación Tarea',
+        'de': '↗️ A2A: Aufgaben-Delegation'
+      },
+      'a2a_response_return': {
+        'it': '↩️ A2A: Ritorno Risultati',
+        'en': '↩️ A2A: Results Return',
+        'fr': '↩️ A2A: Retour Résultats',
+        'es': '↩️ A2A: Retorno Resultados',
+        'de': '↩️ A2A: Ergebnis-Rückgabe'
+      }
     };
-    return stepNames[step] || step;
+    
+    // Usa la lingua del messaggio corrente se disponibile, altrimenti italiano
+    const currentLanguage = 'it'; // Default, sarà sostituito dalla logica del messaggio
+    
+    return stepNames[step]?.[currentLanguage] || stepNames[step]?.['it'] || step;
   }
 
   onKeyPress(event: KeyboardEvent): void {

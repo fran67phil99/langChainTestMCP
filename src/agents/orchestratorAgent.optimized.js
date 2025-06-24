@@ -177,10 +177,10 @@ async function intelligentMcpRouting(userInput, mcpTools) {
     console.log('🔍 Tool List Request: L\'utente chiede informazioni sui tool disponibili');
     return 'list_tools';
   }
-  
-  // PRIORITÀ 2: Controlla se è una richiesta di data exploration
-  if (shouldUseDataExplorer(query, mcpTools)) {
-    console.log('🔍 Data Explorer Request: Richiesta di esplorazione dati rilevata');
+    // PRIORITÀ 2: Controlla se è una richiesta di data exploration (DINAMICO CON LLM)
+  const shouldUseDataExplorerResult = await shouldUseDataExplorer(userInput, mcpTools);
+  if (shouldUseDataExplorerResult) {
+    console.log('🔍 Data Explorer Request: Richiesta di esplorazione dati rilevata (LLM analysis)');
     return 'data_explorer';
   }
     // PRIORITÀ 3: Solo se NON sta chiedendo info sui tool e NON è data exploration, cerca tool rilevanti per esecuzione
@@ -366,141 +366,89 @@ async function getCachedMcpTools() {
   }
 }
 
-// Funzione per riconoscere richieste di data exploration
-function shouldUseDataExplorer(userInput, mcpTools) {
+// Funzione per riconoscere richieste di data exploration (DINAMICA CON LLM)
+async function shouldUseDataExplorer(userInput, mcpTools) {
   const query = userInput.toLowerCase();
   
-  // PRIMA: Escludi query chiaramente generiche/conversazionali
-  const genericQueryPatterns = [
-    /\b(joke|scherzo|barzelletta|divertente|funny)/i,
-    /\b(poem|poesia|verse|verso|compose|componi)/i,
-    /\b(bicycle|bicicletta|bearings|cuscinetti)/i,
-    /\b(weather|tempo|meteo|clima)/i,
-    /\b(explain|spiegami|what does|cosa significa|define|definisci)/i,
-    /\b(i can|io posso|i detect|io rilevo|provide translations|fornire traduzioni)/i,
-    /\b(tell me about|dimmi di|tell me what|dimmi cosa)/i,
-    /\b(general|generale|knowledge|conoscenza|information|informazione)/i,
-    /\b(ai|artificial intelligence|intelligenza artificiale)/i,
-    /\b(hello|ciao|hi|salve|good morning|buongiorno)/i,
-    /\b(help|aiuto|assist|assistenza|support|supporto)/i,
-    /why (couldn't|could not|non poteva|non riusciva)/i,
-    /^(what can you do|cosa puoi fare|what do you do|cosa fai)/i
+  // Solo check di base per query ovviamente conversazionali (molto conservativo)
+  const obviousConversationalPatterns = [
+    /^(hello|ciao|hi|good morning|buongiorno)$/i,
+    /^(help|aiuto)$/i,
+    /^(thanks|grazie|thank you)$/i
   ];
   
-  // Se la query è chiaramente generica, NON usare Data Explorer
-  if (genericQueryPatterns.some(pattern => pattern.test(query))) {
-    console.log('🚫 Generic Query: Esclusa dal Data Explorer - query generica rilevata');
+  // Se è chiaramente una semplice conversazione, evita data explorer
+  if (obviousConversationalPatterns.some(pattern => pattern.test(query.trim()))) {
+    console.log('🚫 Obvious conversational query: skipping data exploration analysis');
     return false;
   }
-  
-  // Pattern per richieste di esplorazione dati (italiano + inglese)
-  const dataExplorationPatterns = [
-    // Scoperta Tabelle/Schema - Italiano
-    /\b(che|quali|what|which)\s+(tabelle?|table).+(ho|hai|have|are|available|disponibil)/i,
-    /\b(tabelle?|table).+(ho|hai|have|available|disponibil)/i,
-    /\b(mostra|show|elenca|list).+(tabelle?|table)/i,
-    /\b(schema|struttura).+(database|db)/i,
-    
-    // Scoperta Tabelle/Schema - Inglese
-    /\b(what|which).+(table).+(do|have|available)/i,
-    /\b(show|list|display).+(table)/i,
-    /\b(database|db).+(schema|structure|table)/i,
-    /\btables?\s+(available|have)/i,
-    
-    // Preview/Visualizzazione - Italiano
-    /\b(mostra|show|visualizza|display).+(prim[ei]|first|dati|data|righe|rows)/i,
-    /\b(prim[ei]|first)\s+(\d+)?\s*(righe|rows|record)/i,
-    /\b(anteprima|preview|sample).+(dati|data)/i,
-    
-    // Preview/Visualizzazione - Inglese
-    /\b(show|display|view).+(first|top).+(rows|lines|records)/i,
-    /\b(first|top)\s+(\d+)?\s*(rows|lines|records)/i,
-    /\b(preview|sample).+(data|records)/i,
-    /\bwhat are the (first|top).+(lines|rows|records)/i,
-    /\bi would like to (know|see).+(first|top).+(lines|rows|records)/i,
-    
-    // Ricerca Specifica di Titoli/Contenuti - NUOVO
-    /\b(which|what|quali|che).+(are|all).+(title|titol).+(include|contain|with)/i,
-    /\b(find|trova|search|cerca).+(all|tutt[ei]).+(title|titol)/i,
-    /\b(universal|universal).+(title|titol).+(include|contain|with)/i,
-    /\b(title|titol).+(that|che).+(include|contain|with)/i,
-    /\b(all).+(data|dati|record).+(with|include|contain)/i,
-    /\b(show me|mostra).+(all|tutt[ei]).+(data|dati|record)/i,
-    
-    // Ricerca - Italiano
-    /\b(cerca|search|trova|find).+(in|nel|dentro|within).+(database|dati|data)/i,
-    /\b(cerca|search|trova|find).+(dipendent[ei]|employee|person|utent[ei])/i,
-    
-    // Ricerca - Inglese  
-    /\b(search|find|look for).+(in|within).+(database|data)/i,
-    /\b(search|find).+(employee|person|user)/i,
-    
-    // Conteggio - Italiano
-    /\b(quant[ei]|count|how many).+(dipendent[ei]|employee|record|righe|rows)/i,
-    /\b(numero|count|total).+(di|of).+(dipendent[ei]|employee|record)/i,
-    
-    // Conteggio - Inglese
-    /\b(how many|count).+(employee|record|rows)/i,
-    /\b(total|number).+(of).+(employee|record)/i,
-    
-    // Struttura/Schema - Italiano
-    /\b(struttura|structure|schema|colonne|columns|campi|fields).+(database|tabella|table)/i,
-    /\b(descri[vw]i|describe).+(struttura|structure|database|tabella|table)/i,
-    
-    // Struttura/Schema - Inglese
-    /\b(structure|schema|columns|fields).+(database|table)/i,
-    /\b(describe).+(structure|database|table)/i,
-    
-    // Statistiche/Riassunto - Italiano
-    /\b(statistiche|statistics|riassunto|summary|report).+(dipendent[ei]|employee|dati|data)/i,
-    /\b(analisi|analysis).+(dati|data)/i,
-      // Statistiche/Riassunto - Inglese
-    /\b(statistics|summary|report).+(employee|data)/i,
-    /\b(analysis).+(data)/i,
-    
-    // Query Specifiche di Business - NUOVO
-    /\b(within which|in which|which).+(issue|periodo|period|time|tempo)/i,
-    /\b(where|dove|when|quando).+(received|ricevuto|got|trovato|found)/i,
-    /\b(expected|previsto|atteso).+(return|ritorno|profit|profitto)/i,
-    /\b(for the|per il|per la).+(comp|component|prodotto|product)/i,
-    /\b(component|comp|prodotto|product|item|articolo).+(\d+)/i,
-    /\b(silce|slice|codice|code|id).+(\d+)/i,
-    
-    // Query con codici e identificatori
-    /\b(code|codice|id|identifier|numero).+(\d+|[A-Z]+\d+)/i,
-    /\b([A-Z]{2,}\d+|\d{6,})/i, // Pattern per codici come "808647" o "LB40"
-    
-    // Query di ricerca generale sui dati
-    /\b(show|mostra|get|ottieni|retrieve|recupera).+(data|dati|info|information|details|dettagli)/i,
-    /\b(tell me|dimmi|show me|mostrami).+(about|su|riguardo)/i
-  ];
-    // Verifica se ci sono tool di database disponibili
+
+  // Verifica se ci sono tool di database disponibili
   const hasDataTools = mcpTools.some(tool => 
     tool.name.includes('database') || 
     tool.name.includes('sql') || 
     tool.name.includes('query') ||
     tool.name.includes('data') ||
-    tool.name.includes('csv')
+    tool.name.includes('csv') ||
+    tool.name.includes('table')
   );
   
-  const matchesPattern = dataExplorationPatterns.some(pattern => pattern.test(query));
+  if (!hasDataTools) {
+    console.log('🚫 No data tools available: skipping data exploration');
+    return false;
+  }
+
+  // Usa LLM per determinare se la query richiede accesso ai dati
+  console.log('🤔 Using LLM to analyze if query requires data exploration...');
   
-  // Verifica aggiuntiva per query che contengono stringhe quotate o nomi di prodotti
-  const hasQuotedString = /'[^']+'/i.test(query) || /"[^"]+"/i.test(query);
-  const containsProductNames = /\b(back to the future|delorean|knight rider|batman|superman|marvel|dc|build up|collection)\b/i.test(query);
-  const isSearchQuery = /\b(which|what|find|search|look for|show|display|get|retrieve)\b/i.test(query);
-  
-  if (matchesPattern && hasDataTools) {
-    console.log('🔍 Data Explorer Pattern: Richiesta di esplorazione dati rilevata');
+  try {
+    const { ChatOpenAI } = require('@langchain/openai');
+    const { HumanMessage } = require('@langchain/core/messages');    const llm = new ChatOpenAI({
+      modelName: 'gpt-4o-mini',
+      temperature: 0
+    });
+
+    const analysisPrompt = `You are an expert system analyzer. Determine if the following user query requires access to a DATABASE or DATA EXPLORATION.
+
+User Query: "${userInput}"
+
+Available data tools: ${mcpTools.filter(tool => 
+  tool.name.includes('database') || 
+  tool.name.includes('sql') || 
+  tool.name.includes('query') ||
+  tool.name.includes('data') ||
+  tool.name.includes('csv')
+).map(tool => tool.name).join(', ')}
+
+Answer with EXACTLY one of these options:
+- YES: if the query asks for specific data, searches, database queries, table information, records, statistics from stored data
+- NO: if the query is conversational, asks for general knowledge, weather, jokes, explanations, or doesn't need database access
+
+Examples:
+- "Which are all the universal titles that include Knight Rider?" → YES (needs database search)
+- "What's the weather like?" → NO (general knowledge)
+- "Show me the first 10 records" → YES (needs database access)
+- "Tell me a joke" → NO (conversational)
+- "How many employees do we have?" → YES (needs data query)
+- "Explain how AI works" → NO (general explanation)
+
+Answer: `;
+
+    const response = await llm.invoke([new HumanMessage(analysisPrompt)]);
+    const decision = response.content.trim().toUpperCase();
+    
+    const shouldUse = decision.startsWith('YES');
+    
+    console.log(`🎯 LLM Analysis: ${decision} → Data Explorer: ${shouldUse}`);
+    
+    return shouldUse;
+    
+  } catch (error) {
+    console.error('❌ Error in LLM analysis for data exploration:', error.message);
+    // Fallback: se c'è un errore, assume che potrebbe essere una query sui dati
+    console.log('⚠️ Fallback: assuming query might need data exploration');
     return true;
   }
-  
-  // Rileva query di ricerca con stringhe specifiche o prodotti
-  if (hasDataTools && isSearchQuery && (hasQuotedString || containsProductNames)) {
-    console.log('🔍 Data Explorer Pattern: Richiesta di ricerca prodotto/stringa rilevata');
-    return true;
-  }
-  return false;
 }
 
 async function runOrchestratorOptimized(userInput, threadId, existingMessages = []) {

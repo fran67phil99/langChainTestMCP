@@ -2,10 +2,11 @@
 const { HumanMessage } = require('@langchain/core/messages');
 const { createTrackedLLM, logAgentActivity } = require('../utils/langsmithConfig');
 const { runSqlSchemaAgent } = require('./sqlSchemaAgent');
+const { a2aLogger } = require('../utils/a2aLogger');
 
 // Initialize LLM for data exploration with LangSmith tracing
 const llm = createTrackedLLM({
-  modelName: "gpt-3.5-turbo",
+  modelName: "gpt-4o-mini",
   temperature: 0.3, // Lower temperature for more consistent data queries
 });
 
@@ -32,9 +33,15 @@ async function runDataExplorerAgent(messages, availableTools, userQuery, threadI
     // 1. Analyze the user's intent and determine the best data operation
     const dataOperation = await analyzeDataIntent(userQuery, availableTools);
     console.log(`🎯 Data Explorer: Identified operation: ${dataOperation.type}`);
-    
-    // 2. A2A Communication: Request schema from SQL Schema Agent
+      // 2. A2A Communication: Request schema from SQL Schema Agent
     console.log(`🤝 Data Explorer: Requesting schema from SQL Schema Agent...`);
+    
+    // Log A2A delegation
+    a2aLogger.logDelegation('DataExplorer', 'SQLSchemaAgent', 'schema_discovery', {
+      userQuery: userQuery,
+      action: 'discover_schema'
+    }, threadId);
+    
     const schemaRequest = {
       action: 'discover_schema',
       from: 'data_explorer',
@@ -42,6 +49,12 @@ async function runDataExplorerAgent(messages, availableTools, userQuery, threadI
     };
     
     const schemaResult = await runSqlSchemaAgent(schemaRequest, availableTools, threadId);
+    
+    // Log A2A completion
+    a2aLogger.logCompletion('SQLSchemaAgent', 'DataExplorer', 'schema_discovery', {
+      success: schemaResult.success,
+      tablesFound: schemaResult.schema?.tables?.length || 0
+    }, threadId);
     
     if (!schemaResult.success) {
       throw new Error(`Schema discovery failed: ${schemaResult.error}`);
@@ -114,9 +127,16 @@ async function runDataExplorerAgent(messages, availableTools, userQuery, threadI
           suggestions: availableTables.map(table => `"Mostra le prime 10 righe della tabella ${table}"`)
         }
       };
-    }
-      // 5. A2A Communication: Request optimized query generation
+    }    // 5. A2A Communication: Request optimized query generation
     console.log(`🤝 Data Explorer: Requesting optimized query from SQL Schema Agent...`);
+    
+    // Log A2A delegation for query generation
+    a2aLogger.logDelegation('DataExplorer', 'SQLSchemaAgent', 'query_generation', {
+      userQuery: userQuery,
+      operation: dataOperation,
+      availableTables: schemaResult.schema?.tables || []
+    }, threadId);
+    
     const queryRequest = {
       action: 'generate_query',
       from: 'data_explorer',
@@ -129,6 +149,13 @@ async function runDataExplorerAgent(messages, availableTools, userQuery, threadI
     };
     
     const queryResult = await runSqlSchemaAgent(queryRequest, availableTools, threadId);
+    
+    // Log A2A completion for query generation
+    a2aLogger.logCompletion('SQLSchemaAgent', 'DataExplorer', 'query_generation', {
+      success: queryResult.success,
+      sqlGenerated: !!queryResult.sqlQuery,
+      queryLength: queryResult.sqlQuery?.length || 0
+    }, threadId);
     
     if (!queryResult.success) {
       throw new Error(`Query generation failed: ${queryResult.error}`);
@@ -580,23 +607,56 @@ CRITICAL FORMATTING INSTRUCTIONS:
 8. If data exceeds limits, mention how many total records/columns exist
 
 ADVANCED DATA ANALYSIS REQUIREMENTS:
-- For single records: Show all field values clearly, don't just count fields
-- For multiple records: Provide statistical insights (counts, frequencies, percentages)
-- For repeated values: Show how many times each value appears
-- Calculate and show totals, averages, min/max where applicable
-- Identify patterns, trends, or notable observations in the data
-- Group similar data and show distribution
-- For text data: Show unique values and their frequencies (only if multiple records)
-- For numerical data: Provide basic statistics (sum, average, range)
-- AVOID statistical analysis for single records - just present the data clearly
+- For single records: Show all field values clearly with proper labels
+- For multiple records: Provide comprehensive statistical insights
+- Calculate and show meaningful statistics: unique values, frequencies, distributions
+- For dates: Show date ranges, most recent, oldest entries
+- For categories: Show distribution and percentages
+- For text fields: Show unique values and their occurrence counts
+- For numerical data: Provide statistics (sum, average, min/max, range)
+- Identify patterns, trends, and notable observations
+- Group similar data and show meaningful breakdowns
+- Show temporal patterns if dates are available
+- Highlight interesting insights and anomalies
+
+ENHANCED STATISTICAL ANALYSIS:
+- Always show total record count
+- Show unique value counts for categorical data
+- Calculate percentages for categorical distributions
+- Show date ranges and temporal patterns
+- Identify most/least common values
+- Show data completeness (missing values if any)
+- Provide business insights based on the data patterns
+
+For queries about specific topics (like Knight Rider), provide:
+- Total records found
+- Breakdown by all available dimensions (market, language, component, channel, etc.)
+- Date distribution and temporal analysis
+- Most common patterns and trends
+- Data quality and completeness analysis
 
 Format the response as:
-- A brief summary of what was found (with appropriate emoji)
-- Key statistics and insights section
-- The data presented as Markdown table, list, or structured text
-- Data analysis section with patterns and observations
-- Technical details (SQL query) in a collapsible section at the end
-- Suggestions for next steps based on the data patterns found
+- A brief summary with emoji of what was found (use specific numbers and key insights)
+- Key statistics section with meaningful business metrics
+- The data presented as a comprehensive Markdown table with the most important columns
+- Detailed data breakdown section with:
+  * Distribution by categories (market, language, component, channel, etc.)
+  * Temporal analysis if dates are present
+  * Data patterns and value distributions
+  * Data quality metrics (completeness, uniqueness, consistency)
+  * Interesting observations and anomalies in the data
+- Technical details (SQL query) in a collapsible section
+- Additional exploration suggestions based on data characteristics
+
+COLUMN PRIORITIZATION:
+When displaying tables, prioritize columns in this order:
+1. Primary identifiers (ID, Title, Name)
+2. Business-critical fields (Market, Language, Component, Channel)
+3. Temporal fields (dates, timestamps)
+4. Descriptive fields (descriptions, categories)
+5. Technical fields (last priority)
+
+Show maximum 8-10 most relevant columns in the main table to avoid overwhelming the user.
 
 Use professional business tone and appropriate emojis for visual appeal.
 
@@ -654,7 +714,7 @@ ${statistics.italian}
 
 💡 **Suggerimento:** ${dataLength === 0 ? 
   `Nessun dato trovato. Prova a esplorare le tabelle disponibili: ${schema.tables.join(', ')}` : 
-  'Puoi fare altre domande sui dati o richiedere analisi diverse come conteggi, medie, o raggruppamenti.'}`;
+  'Puoi esplorare ulteriormente i dati richiedendo breakdown specifici per campo, analisi temporali, o distribuzione per categorie.'}`;
   
   } else if (isFrench) {
     return `📊 **Résultats pour: "${userQuery}"**
@@ -671,7 +731,7 @@ ${statistics.french}
 
 💡 **Suggestion:** ${dataLength === 0 ? 
   `Aucune donnée trouvée. Essayez d'explorer les tables disponibles: ${schema.tables.join(', ')}` : 
-  'Vous pouvez poser d\'autres questions sur les données ou demander des analyses différentes comme des comptes, moyennes, ou regroupements.'}`;
+  'Vous pouvez explorer davantage les données en demandant des ventilations spécifiques par champ, des analyses temporelles, ou la distribution par catégories.'}`;
   
   } else if (isSpanish) {
     return `📊 **Resultados para: "${userQuery}"**
@@ -688,7 +748,7 @@ ${statistics.spanish}
 
 💡 **Sugerencia:** ${dataLength === 0 ? 
   `No se encontraron datos. Intenta explorar las tablas disponibles: ${schema.tables.join(', ')}` : 
-  'Puedes hacer más preguntas sobre los datos o solicitar análisis diferentes como conteos, promedios, o agrupaciones.'}`;
+  'Puedes explorar más los datos solicitando desglose específicos por campo, análisis temporal, o distribución por categorías.'}`;
   
   } else if (isGerman) {
     return `📊 **Ergebnisse für: "${userQuery}"**
@@ -705,7 +765,7 @@ ${statistics.german}
 
 💡 **Vorschlag:** ${dataLength === 0 ? 
   `Keine Daten gefunden. Versuchen Sie, die verfügbaren Tabellen zu erkunden: ${schema.tables.join(', ')}` : 
-  'Sie können weitere Fragen zu den Daten stellen oder verschiedene Analysen wie Zählungen, Durchschnitte oder Gruppierungen anfordern.'}`;
+  'Sie können die Daten weiter erkunden, indem Sie spezifische Aufschlüsselungen nach Feldern, zeitliche Analysen oder Verteilungen nach Kategorien anfordern.'}`;
   
   } else {
     // Default to English
@@ -723,7 +783,7 @@ ${statistics.english}
 
 💡 **Suggestion:** ${dataLength === 0 ? 
   `No data found. Try exploring the available tables: ${schema.tables.join(', ')}` : 
-  'You can ask more questions about the data or request different analyses like counts, averages, or groupings.'}`;
+  'You can further explore the data by requesting specific field breakdowns, temporal analysis, or distribution by categories.'}`;
   }
 }
 
