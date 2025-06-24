@@ -1,6 +1,8 @@
 // MCP Agent - Specialized agent for handling Mauden company data through MCP tools
 const { HumanMessage } = require('@langchain/core/messages');
 const { createTrackedLLM, logAgentActivity } = require('../utils/langsmithConfig');
+const { runSqlSchemaAgent } = require('./sqlSchemaAgent');
+const { runDataExplorerAgent } = require('./dataExplorerAgent');
 
 // Initialize LLM for MCP data processing with LangSmith tracing
 const llm = createTrackedLLM({
@@ -14,9 +16,10 @@ const llm = createTrackedLLM({
  * @param {Object} selectedTool - The MCP tool to use
  * @param {string} userQuery - User's query in English
  * @param {string} threadId - Thread identifier
+ * @param {Array} availableTools - All available tools for A2A communication
  * @returns {Promise<Object>} - MCP agent result with processed data
  */
-async function runMcpAgent(messages, selectedTool, userQuery, threadId) {
+async function runMcpAgent(messages, selectedTool, userQuery, threadId, availableTools = []) {
   console.log(`🔧 MCP Agent: Processing query with tool: ${selectedTool?.name}`);
   
   // Log MCP agent start
@@ -29,9 +32,73 @@ async function runMcpAgent(messages, selectedTool, userQuery, threadId) {
   try {
     if (!selectedTool) {
       throw new Error('No suitable MCP tool found');
+    }    // Check if this is a schema/table discovery query that should use A2A
+    const isSchemaQuery = await isSchemaDiscoveryQuery(userQuery);
+    const isDataQuery = await isDataSearchQuery(userQuery);
+    
+    if (isSchemaQuery && availableTools.length > 0) {
+      console.log(`🤝 MCP Agent: Detected schema query, using A2A with SQL Schema Agent...`);
+      
+      try {
+        // A2A Communication: Request schema from SQL Schema Agent
+        const schemaRequest = {
+          action: 'discover_schema',
+          from: 'mcp_agent',
+          threadId: threadId
+        };
+        
+        const schemaResult = await runSqlSchemaAgent(schemaRequest, availableTools, threadId);
+        
+        if (schemaResult.success && schemaResult.schema) {
+          console.log(`✅ MCP Agent: Got detailed schema via A2A`);
+          
+          // Format the schema response using LLM
+          const schemaResponse = await formatSchemaResponse(userQuery, schemaResult.schema, messages);
+          
+          return {
+            mcpData: schemaResult.schema,
+            finalResponse: schemaResponse,
+            toolUsed: `SQL Schema Agent (A2A)`,
+            success: true,
+            llmElaborated: true,
+            agent: 'mcp',
+            method: 'a2a_schema_discovery'
+          };
+        } else {
+          console.log(`⚠️ MCP Agent: A2A schema discovery failed, falling back to direct MCP tool...`);
+        }
+      } catch (a2aError) {
+        console.log(`⚠️ MCP Agent: A2A error (${a2aError.message}), falling back to direct MCP tool...`);
+      }
     }
-
-    // 1. Call the MCP tool to get raw data
+    
+    if (isDataQuery && availableTools.length > 0) {
+      console.log(`🤝 MCP Agent: Detected data search query, using A2A with Data Explorer Agent...`);
+      
+      try {
+        // A2A Communication: Request data exploration
+        const dataResult = await runDataExplorerAgent(messages, availableTools, userQuery, threadId);
+        
+        if (dataResult.success) {
+          console.log(`✅ MCP Agent: Got data results via A2A`);
+            return {
+            mcpData: dataResult.data,
+            finalResponse: dataResult.formattedResponse || dataResult.explanation || "Data exploration completed successfully",
+            toolUsed: `Data Explorer Agent (A2A)`,
+            success: true,
+            llmElaborated: true,
+            agent: 'mcp',
+            method: 'a2a_data_exploration',
+            queryUsed: dataResult.queryUsed
+          };
+        } else {
+          console.log(`⚠️ MCP Agent: A2A data exploration failed, falling back to direct MCP tool...`);
+        }
+      } catch (a2aError) {
+        console.log(`⚠️ MCP Agent: A2A data exploration error (${a2aError.message}), falling back to direct MCP tool...`);
+      }
+    }    // Fallback: Use direct MCP tool call
+    console.log(`🔧 MCP Agent: Using direct MCP tool: ${selectedTool.name}`);
     const mcpData = await selectedTool.call({});
     console.log(`✅ MCP Agent: Tool executed successfully`);
     
@@ -39,7 +106,7 @@ async function runMcpAgent(messages, selectedTool, userQuery, threadId) {
     logAgentActivity('mcp_agent', 'tool_executed', {
       toolName: selectedTool.name,
       dataReceived: true
-    });    // 2. Use LLM to elaborate the response based on raw data and user query
+    });// 2. Use LLM to elaborate the response based on raw data and user query
     // Filter and convert conversation history to valid LangChain messages
     const validMessages = messages.slice(0, -1).filter(msg => 
       msg && (msg.constructor.name === 'HumanMessage' || msg.constructor.name === 'AIMessage')
@@ -200,6 +267,113 @@ Respond with ONLY "true" if the query requires MCP tools, or "false" if it's a g
     console.error(`❌ MCP Agent routing error:`, error);
     return false; // Default to general agent on error
   }
+}
+
+/**
+ * Check if a query is about schema/table discovery
+ * @param {string} userQuery - User's query in English
+ * @returns {Promise<boolean>} - True if it's a schema query
+ */
+async function isSchemaDiscoveryQuery(userQuery) {
+  const queryLower = userQuery.toLowerCase();
+  
+  // Generic patterns for schema/table discovery (multilingual support)
+  const schemaPatterns = [
+    'table', 'schema', 'column', 'structure', 'database',
+    'what.*available', 'show.*table', 'list.*table', 'describe',
+    'available.*data', 'data.*structure', 'field', 'metadata'
+  ];
+  
+  return schemaPatterns.some(pattern => {
+    const regex = new RegExp(pattern, 'i');
+    return regex.test(queryLower);
+  });
+}
+
+/**
+ * Check if a query is about searching/filtering data
+ * @param {string} userQuery - User's query in English
+ * @returns {Promise<boolean>} - True if it's a data search query
+ */
+async function isDataSearchQuery(userQuery) {
+  const queryLower = userQuery.toLowerCase();
+  
+  // Generic patterns for data search/filtering
+  const dataSearchPatterns = [
+    'find', 'search', 'filter', 'where', 'includes', 'contains',
+    'show.*that', 'get.*where', 'all.*that', 'records.*with',
+    'titles.*include', 'names.*contain', 'entries.*match',
+    'list.*with', 'display.*containing', 'retrieve.*where'
+  ];
+  
+  // If it's clearly a schema query, don't treat as data search
+  const isSchema = await isSchemaDiscoveryQuery(userQuery);
+  if (isSchema) return false;
+  
+  return dataSearchPatterns.some(pattern => {
+    const regex = new RegExp(pattern, 'i');
+    return regex.test(queryLower);
+  });
+}
+
+/**
+ * Format schema response using LLM for better presentation
+ * @param {string} userQuery - Original user query
+ * @param {Object} schema - Schema data from SQL Schema Agent
+ * @param {Array} messages - Message history
+ * @returns {Promise<string>} - Formatted response
+ */
+async function formatSchemaResponse(userQuery, schema, messages) {
+  const validMessages = messages.slice(0, -1).filter(msg => 
+    msg && (msg.constructor.name === 'HumanMessage' || msg.constructor.name === 'AIMessage')
+  );
+  
+  const schemaInfo = {
+    tables: schema.tables || [],
+    totalTables: (schema.tables || []).length,
+    detailed: schema.detailed || {},
+    discoveryMethod: schema.discoveryMethod || 'unknown'
+  };
+  
+  // Extract column information for better presentation
+  const tablesWithDetails = [];
+  for (const [tableName, tableInfo] of Object.entries(schemaInfo.detailed)) {
+    tablesWithDetails.push({
+      name: tableName,
+      columnCount: tableInfo.columnCount || 'unknown',
+      method: tableInfo.method || 'unknown',
+      columnNames: tableInfo.columnNames || [],
+      rowCount: tableInfo.rowCount || 'unknown'
+    });
+  }
+  
+  const llmMessages = [
+    ...validMessages,
+    new HumanMessage(`You are a professional database assistant. The user asked: "${userQuery}"
+
+I discovered the database schema with detailed information:
+
+SCHEMA DISCOVERY RESULT:
+${JSON.stringify({ 
+  ...schemaInfo, 
+  tablesWithDetails 
+}, null, 2)}
+
+Please provide a comprehensive, well-formatted response that:
+- Answers the user's specific question about tables/schema
+- Uses appropriate emojis and Markdown formatting
+- Shows table names, column counts, and other relevant details
+- If column names are available, show the first 10-15 column names as examples
+- Provides insights about the data structure
+- Suggests related questions the user might ask
+- Maintains a professional but accessible tone
+- Mentions the discovery method used if relevant
+
+IMPORTANT: If you see many columns (like 77), emphasize that this is a rich dataset with comprehensive information, not just a simple table.`)
+  ];
+
+  const response = await llm.invoke(llmMessages);
+  return response.content;
 }
 
 module.exports = {

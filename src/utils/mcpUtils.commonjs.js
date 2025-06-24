@@ -14,11 +14,11 @@ async function getAllMcpTools() {
     console.log('🔒 MCP tool discovery is disabled via configuration.');
     return config.tools_override.custom_tools || [];
   }
-
   const enabledServers = config.servers.filter(s => s.enabled);
   if (enabledServers.length === 0) {
     console.warn('⚠️ No enabled MCP servers found in configuration.');
-    return getFallbackTools();
+    console.log('🔒 DYNAMIC SYSTEM: No fallback tools - only using configured servers');
+    return [];
   }
 
   console.log(`🔍 Starting discovery from ${enabledServers.length} MCP servers...`);
@@ -63,24 +63,18 @@ async function getAllMcpTools() {
       } else {
         console.error(`❌ ${server.name}: Failed to load tools - ${result.reason.message}`);
       }
-    }
-
-    if (allTools.length === 0 && discoveryConfig.fallback_to_mock) {
-      console.warn('⚠️ No tools discovered from any server, using fallback tools');
-      return getFallbackTools();
+    }    if (allTools.length === 0 && discoveryConfig.fallback_to_mock) {
+      console.warn('⚠️ No tools discovered from any server');
+      console.log('🔒 DYNAMIC SYSTEM: No fallback tools - only using discovered tools');
+      return [];
     }
 
     console.log(`🎯 Total tools discovered: ${allTools.length}`);
     return allTools;
-
   } catch (error) {
     console.error(`❌ Error during multi-server discovery: ${error.message}`);
     
-    if (discoveryConfig.fallback_to_mock) {
-      console.log('🔄 Falling back to mock tools');
-      return getFallbackTools();
-    }
-    
+    console.log('� DYNAMIC SYSTEM: No fallback tools on error - only using configured servers');
     return [];
   }
 }
@@ -413,49 +407,6 @@ function createToolFromMcpSchema(mcpTool, serverConfig) {
 /**
  * Tools di fallback quando nessun server è disponibile
  */
-function getFallbackTools() {
-  console.log('🔄 Loading fallback MCP tools');
-  
-  const fallbackBaseUrl = process.env.MCP_BASE_URL || 'http://localhost:8080';
-  
-  return [
-    {
-      name: 'get_interns_mcp',
-      description: '[Fallback] Retrieves a list of interns from Mauden via MCP.',
-      serverId: 'fallback',
-      serverName: 'Fallback Server',
-      call: async function(input) {
-        try {
-          const response = await axios.get(`${fallbackBaseUrl}/interns`);
-          return JSON.stringify(response.data);
-        } catch (err) {
-          return JSON.stringify({
-            error: 'Failed to invoke fallback tool get_interns_mcp',
-            details: err.message
-          });
-        }
-      }
-    },
-    {
-      name: 'get_employees_csv_mcp',
-      description: '[Fallback] Retrieves complete employee data from Mauden.',
-      serverId: 'fallback',
-      serverName: 'Fallback Server',
-      call: async function(input) {
-        try {
-          const response = await axios.get(`${fallbackBaseUrl}/employees-csv`);
-          return JSON.stringify(response.data);
-        } catch (err) {
-          return JSON.stringify({
-            error: 'Failed to invoke fallback tool get_employees_csv_mcp',
-            details: err.message
-          });
-        }
-      }
-    }
-  ];
-}
-
 /**
  * Semaforo per limitare le operazioni concorrenti
  */
@@ -487,4 +438,6 @@ class Semaphore {
       next();
     }
   }
-}module.exports = { getAllMcpTools };
+}
+
+module.exports = { getAllMcpTools };
