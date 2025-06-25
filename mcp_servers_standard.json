@@ -65,7 +65,7 @@
       "name": "Mauden SQL MCP Server",
       "url": "http://localhost:5009",
       "mcp_endpoint": "/mcp",
-      "description": "Server MCP completo per import Excel, query database SQLite, analytics e gestione dati Mauden",
+      "description": "Server MCP di De Agostini, per l'interrogazione di dati in SQL su database di cataloghi di film venduti, noleggiati e da vendere.",
       "enabled": true,
       "timeout": 30000,
       "retry_attempts": 3,

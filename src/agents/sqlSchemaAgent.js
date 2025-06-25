@@ -164,57 +164,8 @@ async function generateOptimizedQuery(params, threadId) {
         columnsInfo += `\nTable: ${tableName}\nColumns: ${tableInfo.columnNames.join(', ')}\n`;
       }
     }
-  }  const queryPrompt = `You are an expert SQL generator with access to the real database schema.
-
-Database Schema:
-${JSON.stringify(schema, null, 2)}
-
-EXACT COLUMN NAMES (use these exact names):${columnsInfo}
-
-User Intent: "${userIntent}"
-Operation Type: ${operation.type}
-Operation Parameters: ${JSON.stringify(operation.parameters)}
-
-SEMANTIC ANALYSIS - Detect the user's true intent:
-1. If user asks for "che titoli" or "what titles" or "quali titoli" → They want DISTINCT values from Title column
-2. If user asks for "quanti" or "how many" → They want COUNT(*)
-3. If user asks for specific data/records → They want SELECT * with WHERE
-4. If user asks for preview/sample → They want SELECT * with LIMIT
-
-OPTIMIZATION RULES based on intent:
-- For DISTINCT VALUES (titles, names, categories): Use SELECT DISTINCT column_name FROM table ORDER BY column_name
-- For COUNTS: Use SELECT COUNT(*) or COUNT(DISTINCT column) 
-- For SEARCHES: Use SELECT * WITH WHERE conditions
-- For PREVIEWS: Use SELECT * WITH LIMIT
-
-Generate an optimized SQL query using the EXACT table and column names from the schema above.
-
-CRITICAL RULES:
-- Use ONLY existing tables and columns from the schema above
-- Use the EXACT column names as they appear in the "EXACT COLUMN NAMES" section above
-- Column names may contain underscores, double underscores, or special characters - use them exactly as shown
-- OPTIMIZE based on the semantic analysis above
-- If user wants unique/distinct values, use SELECT DISTINCT on specific columns (more efficient)
-- If user wants counts, use COUNT(*) without unnecessary data transfer
-- If user wants to see data, use SELECT * for comprehensive analysis
-- NEVER use generic names like "dataset_column_name" or "table_column" - use real column names only
-- Return only the SQL query, no explanations
-- DO NOT normalize or change column names
-
-Available tables: ${schema.tables.join(', ')}
-
-EXAMPLES:
-- "che titoli ho" → SELECT DISTINCT Title FROM dataset ORDER BY Title
-- "quanti record" → SELECT COUNT(*) FROM dataset  
-- "mostra i dati" → SELECT * FROM dataset LIMIT 20
-- "trova Knight Rider" → SELECT * FROM dataset WHERE Title LIKE '%Knight Rider%'
-
-EXAMPLES:
-- Search query: SELECT * FROM dataset WHERE Univ__title LIKE '%Knight Rider%' LIMIT 20
-- Preview query: SELECT * FROM dataset LIMIT 20
-- Count query: SELECT COUNT(*), column_name FROM dataset GROUP BY column_name
-
-SQL Query:`;
+  }
+  const queryPrompt = `You are a dynamic, schema-aware SQL generation engine. Your primary goal is to translate natural language user intent into a precise, optimized, and executable SQL query based on a dynamically provided database schema. You must not rely on hardcoded examples.\n\n**Core Mission:** Generate a valid SQL query by reasoning from user intent and the provided schema, not by matching patterns from a fixed list of examples.\n\n**Database Schema (Dynamically Provided):**\n${JSON.stringify(schema, null, 2)}\n\n**Available Columns (Dynamically Provided):**\n${columnsInfo}\n\n**User Request Analysis:**\n- **User Intent:** \"${userIntent}\"\n- **Operation Type:** ${operation.type}\n- **Operation Parameters:** ${JSON.stringify(operation.parameters)}\n\n**4-Step Reasoning Process:**\n\n**Step 1: Deconstruct User Intent**\n- Identify the core **operation**: Is the user asking to \`COUNT\` (how many, quanti), \`LIST DISTINCT\` (what/which titles/products, che/quali titoli/prodotti), \`SEARCH\` for specific records (find, search, trova, cerca), or \`PREVIEW\` data (show me data, mostrami i dati)?\n- Identify the core **entity**: What is the subject of the question? (e.g., \"titles\", \"products\", \"sales\", \"records\").\n- Identify any **filters** or **conditions**: Are there any constraints like dates, statuses, or specific names? (e.g., \"Knight Rider\", \"last month\", \"status is active\").\n\n**Step 2: Map Intent to the Dynamic Schema**\n- **Map the entity to a table and column:** Look at the \`Available Columns\` and find the most semantically relevant column for the user's entity.\n    - If the user asks for \"titles\", and the schema has a \`Title\` or \`product_name\` column, use that.\n    - If the user asks for \"records\", use the primary table (e.g., \`dataset\`, \`products\`).\n- **Map filters to columns:** For each filter identified, find the corresponding column in the schema.\n\n**Step 3: Apply SQL Generation Rules**\n- **For SEARCH operations:**\n    - ALWAYS use the \`LIKE\` operator with wildcards (\`%\`) for any search on a text field (e.g., \`WHERE IdentifiedColumn LIKE '%FilterValue%'\`). This is the most critical rule for flexibility.\n    - NEVER use an exact match (\`=\`) for text fields unless the user provides a specific ID.\n    - Do NOT add a \`LIMIT\` clause unless the user explicitly asks for a \"preview\", \"sample\", or a specific number of records.\n- **For LIST DISTINCT operations:**\n    - Use \`SELECT DISTINCT MappedColumn FROM MappedTable\`.\n- **For COUNT operations:**\n    - Use \`SELECT COUNT(*)\` or \`COUNT(DISTINCT MappedColumn)\` from the mapped table.\n- **For PREVIEW operations:**\n    - Use \`SELECT * FROM MappedTable LIMIT 20\`.\n\n**Step 4: Construct the Final Query**\n- Assemble the query using the exact table and column names from the provided schema.\n- **CRITICAL: NEVER use hardcoded table or column names like \`dataset\` or \`Title\` in your reasoning.** Your reasoning must be based *only* on the schema provided in this request.\n- **CRITICAL: NEVER use placeholder values like 'start_date' or 'end_date'.** If a value for a filter is not present in the user intent, do not include that \`WHERE\` condition.\n\n**Final Output:**\nReturn only the generated SQL query. No explanations, no markdown.`;
 
   try {
     const response = await llm.invoke([new HumanMessage(queryPrompt)]);

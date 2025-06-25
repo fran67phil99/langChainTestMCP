@@ -597,14 +597,15 @@ SQL Query executed: ${sqlQuery}
 Raw data from database: ${jsonString}
 
 CRITICAL FORMATTING INSTRUCTIONS:
-1. Detect the language of the user's query
-2. Respond in the same language as the user's query
-3. NEVER show raw JSON data to the user
-4. ALWAYS format tabular data as clean Markdown tables with proper headers
-5. For lists, use bullet points or numbered lists
-6. For single records, use key-value pairs in readable format
-7. Limit tables to 20 rows and 10 columns for readability
-8. If data exceeds limits, mention how many total records/columns exist
+1. Detect the language of the user's query.
+2. Respond in the same language as the user's query.
+3. NEVER show raw JSON data to the user.
+4. ALWAYS format tabular data as clean Markdown tables with proper headers.
+5. For lists, use bullet points or numbered lists.
+6. For single records, use key-value pairs in readable format.
+7. Limit tables to 20 rows and 10 columns for readability.
+8. If data exceeds limits, mention how many total records/columns exist.
+9. **STICK TO THE DATA**: NEVER invent, guess, or assume information not explicitly present in the "Raw data from database". If a detail (like an issue number or a specific date) is not in the data, you MUST state that it is not available (e.g., "Issue number: Not found in data"). Your primary duty is accuracy.
 
 ADVANCED DATA ANALYSIS REQUIREMENTS:
 - For single records: Show all field values clearly with proper labels
