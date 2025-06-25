@@ -52,46 +52,22 @@ npm run start:both     # Entrambi
 
 Un sistema di agenti AI orchestrato che integra **LangGraph**, **Model Context Protocol (MCP)** e **OpenAI** per creare un'architettura modulare e scalabile. Il progetto include sia un backend Node.js che un frontend Angular per un'esperienza completa.
 
-## 🏗️ Architettura Completa
+## 🏗️ Architettura Evoluta: Planner-Executor-Synthesizer
 
-Il progetto implementa un'architettura full-stack con tre layer principali:
+L'architettura del sistema è stata evoluta da un semplice router reattivo a un modello proattivo **Planner-Executor-Synthesizer**, in grado di gestire richieste complesse e multi-step in modo robusto e intelligente.
 
-### Frontend Layer
-- **🎨 Angular Frontend**: Interfaccia utente moderna con chat in tempo reale
-- **🔗 Socket.IO Client**: Comunicazione WebSocket con il backend
+1.  **🧠 Planner Agent**: Riceve la richiesta dell'utente e, conoscendo dinamicamente i tool disponibili (tramite MCP), genera un piano d'azione in formato JSON. Questo piano scompone la domanda complessa in una serie di passaggi eseguibili, definendo le dipendenze tra di essi.
 
-### Backend Layer  
-- **🌐 Node.js Server**: Server backend con Socket.IO per orchestrazione
-- **🎭 Orchestrator Agent**: Router intelligente che analizza le richieste
-- **🤖 MCP Agent**: Specializzato nell'esecuzione di strumenti esterni
-- **💬 General Agent**: Gestisce conversazioni generali
+2.  **🚀 Executor (Orchestrator)**: Esegue il piano generato dal Planner. Itera attraverso ogni passo, invoca il tool appropriato (es. `dataExplorerAgent` per query SQL), gestisce il contesto di esecuzione salvando i risultati intermedi e li inietta negli step successivi che ne dipendono.
 
-### Services Layer
-- **🐍 MCP Server Python**: Server FastAPI per tools MCP
-- **🔧 External APIs**: OpenAI, LangSmith, altri servizi
+3.  **✍️ Synthesizer Agent**: Una volta che l'Executor ha completato tutti i passaggi e raccolto i dati necessari, il Synthesizer entra in gioco. Analizza la domanda originale dell'utente e tutti i dati raccolti nel contesto di esecuzione per formulare una risposta finale, coerente e in linguaggio naturale, nascondendo tutta la complessità del processo all'utente.
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Angular       │    │   Node.js        │    │   MCP Server    │
-│   Frontend      │◄──►│   Backend        │◄──►│   Python        │
-│   :4200         │    │   :8001          │    │   :8080         │
-└─────────────────┘    └─────────┬────────┘    └─────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    │                         │
-              ┌─────▼──────┐           ┌──────▼──────┐
-              │MCP Agent   │           │General Agent│
-              │(Tools)     │           │(Chat)       │
-              └────────────┘           └─────────────┘
-```
+Questo modello a tre stadi consente al sistema di:
+- **Gestire la complessità**: Rispondere a domande che richiedono più query o l'uso di più strumenti in sequenza.
+- **Essere estensibile**: Nuovi strumenti possono essere aggiunti e il Planner imparerà a usarli senza modifiche al codice.
+- **Fornire risposte di alta qualità**: Le risposte finali sono naturali e contestualizzate, non semplici elenchi di dati.
 
-## 🚀 Caratteristiche Principali
-
-### 🔧 Integrazione MCP
-- Connessione automatica ai server MCP tramite **FastMCP**
-- Cache intelligente degli strumenti disponibili
-- Selezione automatica degli strumenti basata su LLM
-- Gestione robusta degli errori e timeout
+Per maggiori dettagli sull'evoluzione, consultare il documento [ROADMAP-PLANNER-EXECUTOR.md](ROADMAP-PLANNER-EXECUTOR.md).
 
 ### 🧠 Routing Intelligente
 - Analisi automatica delle richieste utente

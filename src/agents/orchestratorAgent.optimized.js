@@ -1,6 +1,7 @@
 // Orchestrator Agent - Streamlined multilingual routing coordinator
 const { HumanMessage, AIMessage } = require('@langchain/core/messages');
 const { runPlannerAgent } = require('./plannerAgent');
+const { runSynthesizerAgent } = require('./synthesizerAgent'); // Import the synthesizer
 const { processWithLanguageSupport } = require('./languageAgent');
 const { runDataExplorerAgent } = require('./dataExplorerAgent');
 const { runMcpAgent } = require('./mcpAgent');
@@ -61,16 +62,13 @@ async function executePlan(plan, initialUserInput, chat_history) {
         }
     }
 
-    // In Phase 3, we will call a SynthesizerAgent here.
-    // For now, we return the result of the last step.
-    console.log('✨ Plan execution complete.');
-    const lastStep = plan[plan.length - 1];
-    const finalResultVar = lastStep.output_variable;
-    const finalResponse = executionContext[finalResultVar] || "The plan was executed successfully.";
-    
+    // Phase 3: Call the Synthesizer Agent to craft the final response
+    console.log('✨ Plan execution complete. Calling Synthesizer Agent...');
+    const finalSynthesizedResponse = await runSynthesizerAgent(initialUserInput, executionContext, plan);
+
     return {
-        response: finalResponse,
-        technical_details: `Execution Context: ${JSON.stringify(executionContext)}`
+        response: finalSynthesizedResponse,
+        technical_details: `Execution Context: ${JSON.stringify(executionContext, null, 2)}`
     };
 }
 

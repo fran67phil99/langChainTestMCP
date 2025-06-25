@@ -48,26 +48,31 @@ Il Planner Agent non avrà una conoscenza statica degli strumenti. Al contrario,
     2.  Gestire le dipendenze tra gli step.
     3.  Mantenere un "contesto di esecuzione" (un oggetto JSON) per salvare i risultati intermedi (es. `output_variable`).
     4.  Iniettare i risultati degli step precedenti nei prompt degli step successivi.
+*   **Stato:** ✅ **Completata**
 
 ---
 
-## Fase 3: Introduzione di un "Synthesizer Agent"
+## Fase 3: Aggiunta di un "Synthesizer Agent"
 
-**Obiettivo:** Creare un agente che formuli una risposta finale coerente a partire dai risultati raccolti.
+**Obiettivo:** Creare un agente finale che trasformi i dati grezzi raccolti dall'Executor in una risposta naturale e coerente per l'utente.
 
 *   **Azione 3.1:** Creazione del file `src/agents/synthesizerAgent.js`.
 *   **Azione 3.2:** Sviluppo di un prompt che istruisca il Synthesizer a:
-    1.  Ricevere la domanda originale dell'utente e il contesto di esecuzione finale.
-    2.  Sintetizzare i dati raccolti in una risposta in linguaggio naturale, completa e precisa.
+    1.  Analizzare la domanda originale dell'utente.
+    2.  Esaminare il contesto di esecuzione contenente tutti i dati raccolti.
+    3.  Formulare una risposta unica e fluida nella lingua originale della richiesta.
+    4.  Evitare di menzionare dettagli tecnici come i nomi delle variabili o gli step del piano.
+*   **Azione 3.3:** Modifica dell'Executor per invocare il Synthesizer come passo finale, passandogli la domanda originale e il contesto di esecuzione.
+*   **Stato:** ✅ **Completata**
 
 ---
 
-## Nuovo Flusso Operativo
+## Stato Attuale del Progetto
 
-1.  **Utente** -> **Orchestrator**
-2.  **Orchestrator** -> **Planner Agent** (con la lista dei tool)
-3.  **Planner Agent** -> Restituisce Piano JSON -> **Orchestrator/Executor**
-4.  **Orchestrator/Executor** -> Esegue il piano step-by-step, invocando i tool necessari e salvando i risultati.
-5.  **Orchestrator/Executor** -> **Synthesizer Agent** (con domanda originale e risultati finali)
-6.  **Synthesizer Agent** -> Restituisce risposta finale -> **Orchestrator**
-7.  **Orchestrator** -> **Utente**
+L'architettura **Planner-Executor-Synthesizer** è stata implementata con successo. Il sistema è ora in grado di:
+
+1.  **Pianificare:** Decomporre una domanda complessa in un piano eseguibile.
+2.  **Eseguire:** Eseguire il piano passo dopo passo, gestendo le dipendenze e raccogliendo i dati necessari.
+3.  **Sintetizzare:** Generare una risposta finale, coerente e in linguaggio naturale a partire dai dati raccolti.
+
+Il sistema è robusto, estensibile e pronto per future evoluzioni.

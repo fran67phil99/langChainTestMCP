@@ -6,6 +6,7 @@ const plannerAgentModule = require('../src/agents/plannerAgent');
 const dataExplorerAgentModule = require('../src/agents/dataExplorerAgent');
 const mcpAgentModule = require('../src/agents/mcpAgent');
 const generalAgentModule = require('../src/agents/generalAgent');
+const synthesizerAgentModule = require('../src/agents/synthesizerAgent'); // Import the synthesizer module
 
 // 1. Mock the PlannerAgent to return a predefined plan
 const mockPlan = [
@@ -37,7 +38,11 @@ sinon.stub(dataExplorerAgentModule, 'runDataExplorerAgent').callsFake(async (pro
     return { response: 'Unknown prompt for DataExplorer' };
 });
 
-// 3. Mock MCP and General agents
+// 3. Mock the new SynthesizerAgent
+const mockSynthesizedResponse = "Il dipartimento con più stagisti è Ingegneria e l'età media dei suoi dipendenti è 34.";
+sinon.stub(synthesizerAgentModule, 'runSynthesizerAgent').resolves(mockSynthesizedResponse);
+
+// 4. Mock MCP and General agents
 sinon.stub(mcpAgentModule, 'selectMcpTool').resolves([]); // No extra MCP tools
 sinon.stub(mcpAgentModule, 'runMcpAgent').resolves({ response: 'MCP Agent Result' });
 sinon.stub(generalAgentModule, 'runGeneralAgent').resolves({ response: 'General Agent Fallback' });
@@ -58,12 +63,15 @@ async function runPlannerTest() {
 
     // --- Assertions ---
     try {
-        // Assert that the final response is the result of the last step
-        assert.strictEqual(result.response, '34', 'Test Failed: The final response should be the result of the last step.');
+        // Assert that the final response is the synthesized one
+        assert.strictEqual(result.response, mockSynthesizedResponse, 'Test Failed: The final response should be the synthesized one.');
 
         // Assert that the execution context was built correctly
         const expectedContext = '{"reparto_top":"Ingegneria","eta_media":"34"}';
-        assert.ok(result.technical_details.includes(expectedContext), 'Test Failed: Execution context is incorrect.');
+        // The compact JSON string is now in technical_details
+        const technicalDetails = JSON.parse(result.technical_details.replace('Execution Context: ', ''));
+        assert.deepStrictEqual(technicalDetails, JSON.parse(expectedContext), 'Test Failed: Execution context is incorrect.');
+
 
         console.log('🎉 All assertions passed!');
     } catch (error) {
