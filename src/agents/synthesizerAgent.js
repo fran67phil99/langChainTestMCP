@@ -2,6 +2,8 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { HumanMessage } = require('@langchain/core/messages');
 const { logAgentActivity } = require('../utils/langsmithConfig');
 
+console.log('Synthesizer Agent: Loading...');
+
 /**
  * Runs the Synthesizer Agent to generate a final, coherent response from the results of a plan.
  * @param {string} originalQuery - The user's original query.

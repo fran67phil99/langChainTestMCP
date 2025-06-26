@@ -6,66 +6,91 @@ const llm = createTrackedLLM({
   temperature: 0.0, // Low temperature for deterministic and structured output (JSON)
 });
 
-const prompt_template = `
-# MISSION: Decompose a user's complex question into a step-by-step execution plan in JSON format.
+const plannerPromptTemplate = `
+You are a master planner agent. Your role is to analyze a user's query and create a clear, step-by-step execution plan for other agents to follow. The plan must be a JSON array of "steps".
 
-# CONTEXT
-You are a master planner agent. Your role is to analyze a user's request and a list of available tools to generate a clear, machine-readable JSON plan.
-You do not execute the plan. You only create it.
+**Query Analysis & Plan Generation Rules:**
 
-# INPUTS
-1.  **User Request:** The original question from the user.
-    ---
-    {user_request}
-    ---
-2.  **Available Tools:** A JSON array of tools you can use in your plan. Each tool has a 'name' and a 'description'.
-    ---
-    {available_tools}
-    ---
+1.  **Decomposition:** Break down complex, multi-part, or ambiguous queries into a logical sequence of simple, atomic steps.
+2.  **Agent Selection:** For each step, identify the most appropriate agent to handle it. Available agents are:
+    *   \`DataExplorerAgent\`: For queries requiring data retrieval, SQL generation, or database interaction.
+    *   \`GeneralAgent\`: For conversational questions, greetings, or topics outside the database scope.
+3.  **Parameter Definition:** For each step, define the \`query\` parameter. This should be a clear, self-contained instruction for the designated agent.
+4.  **Clarification:** If the user's query is ambiguous, incomplete, or requires more information (e.g., a missing date range), your FIRST and ONLY step should be to ask a clarifying question back to the user. Use the \`GeneralAgent\` for this.
+    *   **Example:**
+        *   User Query: "Show me sales by date."
+        *   Your Plan: \`[{"step": 1, "agent": "GeneralAgent", "query": "Could you please specify the date range for the sales you're interested in?"}]\`
+5.  **SQL Focus:** For \`DataExplorerAgent\` steps, the \`query\` should be a clear natural language question that can be translated into a SQL query. Do NOT generate SQL code yourself.
+6.  **Output Format:** The final output MUST be a valid JSON array of step objects. Each object must contain \`step\`, \`agent\`, and \`query\`. Do not add any extra text, explanations, or markdown formatting around the JSON.
 
-# RULES
-1.  **Analyze the Request:** First, understand what the user is asking. Is it a simple question solvable in one step, or a complex one requiring multiple steps?
-2.  **Select the Right Tools:** For each step, choose the most appropriate tool from the 'Available Tools' list based on its description.
-3.  **Handle Dependencies:** If a step needs information from a previous step, define it in the 'dependencies' array. Use the 'output_variable' from the previous step as an input for the current step's prompt (e.g., {variable_name}).
-4.  **Generate JSON Output:** Your final output MUST be a valid JSON array of plan steps. Do not add any other text, explanation, or markdown formatting.
-5.  **Simple Questions:** If the request can be answered in a single step, the plan should contain only one object.
-6.  **Complex Questions:** Break down the request into logical, sequential steps.
+**Input:**
 
-# OUTPUT FORMAT (JSON)
-Your output must be a JSON array following this structure:
-[
-  {
-    "step_id": 1,
-    "tool_to_use": "tool_name_from_list",
-    "prompt": "The specific instruction for this step. Use {variable_name} for dependencies.",
-    "dependencies": [],
-    "output_variable": "variable_name_for_the_result"
-  },
-  {
-    "step_id": 2,
-    "tool_to_use": "another_tool_name",
-    "prompt": "Instruction for step 2 that uses the result from step 1, like 'Find details for {variable_name_for_the_result}'.",
-    "dependencies": [1],
-    "output_variable": "another_result_variable"
-  }
-]
+*   **User Query:** The user's request.
+*   **Conversation History:** A summary of the previous turns in the conversation.
 
-# TASK
-Generate the JSON execution plan for the provided user request and available tools.
+**Examples:**
+
+*   **User Query:** "Qual è il titolo con le vendite più recenti?"
+    *   **Plan:**
+        \`\`\`json
+        [
+          {
+            "step": 1,
+            "agent": "DataExplorerAgent",
+            "query": "Find the title with the most recent sales date."
+          }
+        ]
+        \`\`\`
+
+*   **User Query:** "Ciao, come stai? E poi, mostrami i dati degli stagisti."
+    *   **Plan:**
+        \`\`\`json
+        [
+          {
+            "step": 1,
+            "agent": "GeneralAgent",
+            "query": "Respond to the user's greeting: 'Ciao, come stai?'"
+          },
+          {
+            "step": 2,
+            "agent": "DataExplorerAgent",
+            "query": "Retrieve all data for the interns."
+          }
+        ]
+        \`\`\`
+
+**Generate the plan for the following request:**
+
+**User Query:** "{userInput}"
+**Available Tools:**
+{availableTools}
+**Conversation History:**
+{chatHistory}
 `;
 
 /**
- * Generates an execution plan based on user input and available tools.
- * @param {{user_request: string, available_tools: string}} inputs - The user's request and the JSON string of available tools.
+ * Generates an execution plan based on user input, available tools, and conversation history.
+ * @param {{user_request: string, available_tools: Array, chat_history: Array}} inputs - The user's request, available tools, and conversation history.
  * @returns {Promise<any>} The raw response from the language model, expected to be a JSON string.
  */
 async function runPlannerAgent(inputs) {
     console.log('🧠 Planner Agent: Generating plan...');
-    const { user_request, available_tools } = inputs;
+    const { user_request, available_tools, chat_history } = inputs;
 
-    const formatted_prompt = prompt_template
-        .replace('{user_request}', user_request)
-        .replace('{available_tools}', available_tools);
+    // Format available tools for the prompt
+    const toolsDescription = available_tools && available_tools.length > 0 
+        ? available_tools.map(tool => `- ${tool.name}: ${tool.description || 'No description'}`).join('\n')
+        : 'No tools available';
+
+    // Format chat history for the prompt  
+    const historyDescription = chat_history && chat_history.length > 0
+        ? chat_history.map(msg => `${msg._getType ? msg._getType() : 'unknown'}: ${msg.content}`).join('\n')
+        : 'No previous conversation';
+
+    const formatted_prompt = plannerPromptTemplate
+        .replace('{userInput}', user_request)
+        .replace('{availableTools}', toolsDescription)
+        .replace('{chatHistory}', historyDescription);
 
     const response = await llm.invoke(formatted_prompt);
     

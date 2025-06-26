@@ -43,6 +43,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@langchain/google-genai": "^0.2.13",
     "@langchain/langgraph": "^0.3.1",
     "@langchain/openai": "^0.5.12",
     "@modelcontextprotocol/sdk": "^1.13.0",

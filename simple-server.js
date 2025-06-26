@@ -12,7 +12,7 @@ console.log('✅ Dependencies loaded');
 
 // Import compiled optimized orchestrator
 console.log('📁 Loading orchestrator from: ./src/agents/orchestratorAgent.optimized.js');
-const { runOrchestratorOptimized } = require('./src/agents/orchestratorAgent.optimized.js');
+const { runOrchestration } = require('./src/agents/orchestratorAgent.optimized.js');
 console.log('✅ Optimized Orchestrator loaded successfully');
 
 // Import log translator for multilingual progress logs
@@ -78,7 +78,7 @@ app.post('/api/chat', async (req, res) => {
       }
       return { _getType: () => 'human', content: msg.content };    });
     
-    const result = await runOrchestratorOptimized(message, threadId, existingMessages);
+    const result = await runOrchestration(message, threadId, existingMessages);
     
     // Add AI response to conversation history
     const aiResponse = result.finalAnswer || result.finalResponse || result.messages?.[result.messages.length - 1]?.content || 'Nessuna risposta disponibile';
@@ -300,7 +300,7 @@ io.on('connection', (socket) => {
       
       // Run orchestrator with conversation history
       console.log(`🚀 Starting orchestrator for message: "${message}" with ${existingMessages.length} previous messages`);
-      const result = await runOrchestratorOptimized(message, threadId, existingMessages);
+      const result = await runOrchestration(message, threadId, existingMessages);
       console.log(`✅ Orchestrator completed, result:`, result);
       
       // Emit agent selection progress
