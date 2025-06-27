@@ -1,5 +1,5 @@
 // Test diretto della funzione getAllMcpTools
-const { getAllMcpTools } = require('./src/utils/mcpUtils.commonjs.js');
+const { getAllMcpTools } = require('../src/utils/mcpUtils.commonjs.js');
 
 async function testMcpToolsDirectly() {
   console.log('🧪 Test diretto getAllMcpTools...');

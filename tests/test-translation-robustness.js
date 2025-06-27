@@ -1,5 +1,5 @@
 // Test unitario per verificare la robustezza del sistema contro "non definito"
-const { detectAndTranslateToEnglish, translateToUserLanguage, processWithLanguageSupport } = require('./src/agents/languageAgent');
+const { detectAndTranslateToEnglish, translateToUserLanguage, processWithLanguageSupport } = require('../src/agents/languageAgent');
 
 async function testTranslationRobustness() {
     console.log('🧪 Testing Translation Robustness (no API calls)...\n');

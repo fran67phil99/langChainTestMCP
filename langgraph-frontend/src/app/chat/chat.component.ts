@@ -89,6 +89,7 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
   // Auto-scroll control
   private shouldAutoScroll: boolean = true;
   private userInteracting: boolean = false;
+  private shouldScrollOnComplete: boolean = false; // Nuovo flag per scrolling alla fine
   
   // Progress step queue for smooth display
   private progressQueue: ProgressEvent[] = [];
@@ -204,10 +205,25 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       this.shouldAutoScroll = true;
     }
   }  ngAfterViewChecked(): void {
-    // Solo scroll automatico se non stiamo interagendo e dovremmo fare auto-scroll
-    // Aggiungiamo un check aggiuntivo per essere sicuri che non ci siano interazioni in corso
+    // Solo scroll automatico se:
+    // 1. Non stiamo interagendo 
+    // 2. Dovremmo fare auto-scroll
+    // 3. NON c'è elaborazione in corso (nuovo controllo)
+    // 4. È stato richiesto esplicitamente lo scroll alla fine
     if (this.shouldAutoScroll && !this.userInteracting && !this.isUserCurrentlyInteracting()) {
-      this.scrollToBottom();
+      // Se c'è un messaggio in elaborazione, NON fare scroll automatico
+      if (this.currentProcessingMessageId && !this.shouldScrollOnComplete) {
+        return; // Blocca lo scrolling durante l'elaborazione
+      }
+      
+      // Se è stato richiesto scroll alla fine, eseguilo e reset del flag
+      if (this.shouldScrollOnComplete) {
+        this.scrollToBottom();
+        this.shouldScrollOnComplete = false;
+      } else if (!this.currentProcessingMessageId) {
+        // Scroll normale solo se non c'è elaborazione in corso
+        this.scrollToBottom();
+      }
     }
   }
 
@@ -261,8 +277,9 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       this.newMessage = '';
       this.isTyping = true;
       
-      // Enable auto-scroll for new messages
-      this.shouldAutoScroll = true;
+      // Durante l'elaborazione, DISABILITA auto-scroll per evitare salti continui
+      this.shouldAutoScroll = true; // Mantieni abilitato per quando finisce
+      this.shouldScrollOnComplete = false; // Reset flag
       this.userInteracting = false;
       
       // Create placeholder message for AI response with processing state
@@ -398,6 +415,17 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
     console.log(`✅ Processing message completed. Language: ${message.processLanguage}, Logs: ${message.progressLogs?.length || 0}`);
     
     this.currentProcessingMessageId = null;
+    
+    // IMPORTANTE: Ora che il messaggio è completato, richiedi lo scroll finale
+    this.shouldScrollOnComplete = true;
+    
+    // Forza un ciclo di rilevamento delle modifiche per attivare lo scroll
+    setTimeout(() => {
+      if (this.shouldAutoScroll && !this.userInteracting) {
+        this.scrollToBottom();
+        this.shouldScrollOnComplete = false;
+      }
+    }, 100);
   }
   private handleProgressEvent(progressEvent: ProgressEvent): void {
     console.log('Progress event received:', progressEvent);

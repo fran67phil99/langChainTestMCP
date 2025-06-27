@@ -1,6 +1,6 @@
 // Test diretto dell'orchestrator
 require('dotenv').config(); // Carica le variabili d'ambiente
-const { runOrchestration } = require('./src/agents/orchestratorAgent.optimized.js');
+const { runOrchestration } = require('../src/agents/orchestratorAgent.optimized.js');
 
 async function testOrchestratorDirectly() {
   console.log('🧪 Test diretto dell\'orchestrator...');

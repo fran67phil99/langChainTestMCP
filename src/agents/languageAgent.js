@@ -217,7 +217,7 @@ async function processWithLanguageSupport(userInput, processingFunction) {
     const englishResult = await processingFunction(languageInfo.translatedText);
     
     // Defensive check for englishResult
-    if (!englishResult || !englishResult.finalResponse) {
+    if (!englishResult || (!englishResult.finalResponse && !englishResult.response)) {
       console.log(`⚠️ Processing function returned invalid result:`, englishResult);
       
       const fallbackMessage = languageInfo.detectedLanguage === 'it' 
@@ -231,9 +231,12 @@ async function processWithLanguageSupport(userInput, processingFunction) {
       };
     }
     
+    // Get the response content - try finalResponse first, then response
+    const responseContent = englishResult.finalResponse || englishResult.response;
+    
     // Step 3: Translate response back to user's language
     const finalResponse = await translateToUserLanguage(
-      englishResult.finalResponse,
+      responseContent,
       languageInfo.detectedLanguage,
       languageInfo.languageName
     );

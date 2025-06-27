@@ -1,7 +1,7 @@
 // Test del nuovo sistema di ottimizzazione semantica delle query
 require('dotenv').config();
 
-const { runSqlSchemaAgent } = require('./src/agents/sqlSchemaAgent');
+const { runSqlSchemaAgent } = require('../src/agents/sqlSchemaAgent');
 
 async function testSemanticOptimization() {
   console.log('🧪 Testing Semantic Query Optimization...');

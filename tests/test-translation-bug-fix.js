@@ -1,5 +1,5 @@
 // Test specifico per verificare la risoluzione del bug "non definito"
-const { runOrchestration } = require('./src/agents/orchestratorAgent.optimized');
+const { runOrchestration } = require('../src/agents/orchestratorAgent.optimized');
 
 async function testTranslationBugFix() {
     console.log('🧪 Testing Translation Bug Fix...\n');

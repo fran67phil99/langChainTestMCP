@@ -1,6 +1,6 @@
 // Test finale del sistema MCP risolto
 require('dotenv').config();
-const { runOrchestration } = require('./src/agents/orchestratorAgent.optimized.js');
+const { runOrchestration } = require('../src/agents/orchestratorAgent.optimized.js');
 
 async function finalTest() {
   console.log('🧪 TEST FINALE - Sistema MCP Risolto');
