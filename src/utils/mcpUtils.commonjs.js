@@ -10,11 +10,31 @@ async function getAllMcpTools() {
   const converter = new McpFormatConverter();
   const config = converter.loadUnifiedConfig();
   
+  console.log('🔍 MCP Tools Discovery: Starting...');
+  
+  // Protezione contro configurazione null/undefined
+  if (!config) {
+    console.error('❌ No configuration loaded');
+    return [];
+  }
+  
+  if (!config.discovery) {
+    console.warn('⚠️ No discovery configuration found, creating default');
+    config.discovery = {
+      enabled: true,
+      timeout_per_server: 10000,
+      max_concurrent_discoveries: 3,
+      cache_ttl_minutes: 5,
+      fallback_to_mock: false
+    };
+  }
+  
   if (!config.discovery.enabled) {
     console.log('🔒 MCP tool discovery is disabled via configuration.');
-    return config.tools_override.custom_tools || [];
+    return config.tools_override?.custom_tools || [];
   }
-  const enabledServers = config.servers.filter(s => s.enabled);
+  
+  const enabledServers = (config.servers || []).filter(s => s.enabled);
   if (enabledServers.length === 0) {
     console.warn('⚠️ No enabled MCP servers found in configuration.');
     console.log('🔒 DYNAMIC SYSTEM: No fallback tools - only using configured servers');
@@ -23,6 +43,12 @@ async function getAllMcpTools() {
 
   console.log(`🔍 Starting discovery from ${enabledServers.length} MCP servers...`);
   console.log(`📋 Using ${config.servers.find(s => s.type === 'command') ? 'Standard MCP' : 'HTTP'} format servers`);
+  
+  // Log dell'istanza MCP client che verrà utilizzata
+  const MCPClient = require('./mcpClient');
+  const mcpClient = new MCPClient();
+  const clientStats = mcpClient.getConnectionStats();
+  console.log(`📊 MCP Client Stats: ${JSON.stringify(clientStats)}`);
   
   const allTools = [];
   const discoveryPromises = [];
@@ -35,8 +61,13 @@ async function getAllMcpTools() {
     discoveryPromises.push(
       semaphore.acquire().then(async (release) => {
         try {
+          console.log(`🔍 Starting discovery for server: ${server.name} (${server.id})`);
           const tools = await discoverToolsFromServer(server);
+          console.log(`✅ Completed discovery for ${server.name}: ${tools.length} tools found`);
           return tools;
+        } catch (error) {
+          console.error(`❌ Discovery failed for ${server.name}: ${error.message}`);
+          return [];
         } finally {
           release();
         }
@@ -85,19 +116,35 @@ async function getAllMcpTools() {
 async function discoverToolsFromServer(serverConfig) {
   const serverId = serverConfig.id;
   
-  // Controlla cache prima
-  if (mcpConfigManager.isCacheValid(serverId)) {
-    console.log(`📋 ${serverConfig.name}: Using cached tools`);
+  // Verifica cache prima - ma salta se ci sono stati errori di connessione recenti
+  const hasRecentConnectionErrors = mcpConfigManager.hasRecentConnectionErrors(serverId);
+  if (!hasRecentConnectionErrors && mcpConfigManager.isCacheValid(serverId)) {
+    console.log(`📋 ${serverConfig.name}: Using cached tools (no recent connection errors)`);
     return mcpConfigManager.getCachedTools(serverId);
+  } else if (hasRecentConnectionErrors) {
+    console.log(`⚠️ ${serverConfig.name}: Bypassing cache due to recent connection errors`);
   }
 
-  // Distingui tra server HTTP e server command MCP standard
-  if (serverConfig.type === 'http' && serverConfig.url) {
-    return await discoverFromHttpServer(serverConfig);
-  } else if (serverConfig.type === 'command' || serverConfig.command) {
-    return await discoverFromMcpCommandServer(serverConfig);
-  } else {
-    throw new Error(`Server type not supported: ${serverConfig.type || 'unknown'}`);
+  try {
+    let tools;
+    
+    // Distingui tra server HTTP e server command MCP standard
+    if (serverConfig.type === 'http' && serverConfig.url) {
+      tools = await discoverFromHttpServer(serverConfig);
+    } else if (serverConfig.type === 'command' || serverConfig.command) {
+      tools = await discoverFromMcpCommandServer(serverConfig);
+    } else {
+      throw new Error(`Server type not supported: ${serverConfig.type || 'unknown'}`);
+    }
+    
+    // Se arriviamo qui, la connessione è riuscita - cancella errori precedenti
+    mcpConfigManager.clearConnectionErrors(serverId);
+    
+    return tools;
+  } catch (error) {
+    // Registra l'errore di connessione
+    mcpConfigManager.recordConnectionError(serverId, error);
+    throw error;
   }
 }
 
@@ -181,7 +228,18 @@ async function discoverFromMcpCommandServer(serverConfig) {
     const MCPClient = require('./mcpClient');
     const mcpClient = new MCPClient();
     
+    // Verifica se esiste già una connessione sana
+    if (mcpClient.isConnected(serverId)) {
+      console.log(`🔄 ${serverConfig.name}: Using existing healthy connection`);
+    } else {
+      console.log(`🔌 ${serverConfig.name}: Creating new connection`);
+    }
+    
     const tools = await mcpClient.getToolsList(serverConfig);
+    
+    if (tools.length === 0) {
+      console.warn(`⚠️ ${serverConfig.name}: No tools returned from server`);
+    }
     
     // Converti i tool MCP in formato interno
     const formattedTools = tools.map(tool => createToolFromMcpSchema(tool, serverConfig));
@@ -194,6 +252,7 @@ async function discoverFromMcpCommandServer(serverConfig) {
     
   } catch (error) {
     console.warn(`❌ ${serverConfig.name}: MCP discovery failed - ${error.message}`);
+    console.warn(`❌ ${serverConfig.name}: Error details: ${error.stack}`);
     throw error;
   }
 }

@@ -5,7 +5,7 @@ const path = require('path');
 class McpFormatConverter {
   constructor() {
     this.standardConfigPath = path.join(__dirname, '../../mcp_servers_standard.json');
-    this.originalConfigPath = path.join(__dirname, '../../mcp_servers.json');
+    this.originalConfigPath = path.join(__dirname, '../../mcp_servers_standard.json');
   }
 
   /**

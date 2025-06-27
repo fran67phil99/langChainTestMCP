@@ -5,10 +5,13 @@ const axios = require('axios');
 
 class McpConfigManager {
   constructor() {
-    this.configPath = path.join(__dirname, '..', '..', 'mcp_servers.json');
+    this.configPath = path.join(__dirname, '..', '..', 'mcp_servers_standard.json');
     this.config = null;
     this.toolsCache = new Map(); // Cache per server
     this.lastCacheUpdate = new Map();
+    this.connectionErrors = new Map(); // Track connection errors per server
+    this.lastErrorTime = new Map(); // Track when errors occurred
+    this.errorThreshold = 30000; // 30 seconds threshold for recent errors
   }
 
   /**
@@ -120,17 +123,60 @@ class McpConfigManager {
   }
 
   /**
-   * Ottiene i tool personalizzati se abilitati
+   * Registra un errore di connessione per un server
    */
-  getCustomTools() {
-    if (!this.config) {
-      this.loadConfig();
-    }
+  recordConnectionError(serverId, error) {
+    this.connectionErrors.set(serverId, error);
+    this.lastErrorTime.set(serverId, Date.now());
+    console.warn(`📝 Recorded connection error for ${serverId}: ${error.message}`);
+  }
+
+  /**
+   * Verifica se ci sono stati errori di connessione recenti
+   */
+  hasRecentConnectionErrors(serverId) {
+    const lastError = this.lastErrorTime.get(serverId);
+    if (!lastError) return false;
     
-    if (this.config.tools_override.enabled) {
-      return this.config.tools_override.custom_tools;
+    const timeSinceError = Date.now() - lastError;
+    return timeSinceError < this.errorThreshold;
+  }
+
+  /**
+   * Cancella gli errori di connessione per un server (dopo una connessione riuscita)
+   */
+  clearConnectionErrors(serverId) {
+    this.connectionErrors.delete(serverId);
+    this.lastErrorTime.delete(serverId);
+    console.log(`✅ Cleared connection errors for ${serverId}`);
+  }
+
+  /**
+   * Ottiene le statistiche degli errori di connessione
+   */
+  getConnectionErrorStats() {
+    const stats = {
+      totalServersWithErrors: this.connectionErrors.size,
+      recentErrors: 0,
+      errorsByServer: {}
+    };
+
+    for (const [serverId, error] of this.connectionErrors) {
+      const lastError = this.lastErrorTime.get(serverId);
+      const isRecent = lastError && (Date.now() - lastError) < this.errorThreshold;
+      
+      if (isRecent) {
+        stats.recentErrors++;
+      }
+      
+      stats.errorsByServer[serverId] = {
+        error: error.message,
+        lastOccurred: new Date(lastError).toISOString(),
+        isRecent
+      };
     }
-    return [];
+
+    return stats;
   }
 
   /**

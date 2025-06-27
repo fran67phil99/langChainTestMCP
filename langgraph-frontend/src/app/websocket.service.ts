@@ -17,6 +17,39 @@ interface ProgressEvent {
   userQuery?: string;
 }
 
+interface EnhancedProgressStep {
+  id: string;
+  threadId: string;
+  title: string;
+  description: string;
+  status: 'running' | 'success' | 'error' | 'warning';
+  startTime: string;
+  endTime?: string;
+  subSteps: EnhancedSubStep[];
+  language: string;
+  stepNumber: number;
+  finalMessage?: string;
+}
+
+interface EnhancedSubStep {
+  id: string;
+  message: string;
+  status: 'info' | 'success' | 'error' | 'warning';
+  timestamp: string;
+}
+
+interface EnhancedProgressEvent {
+  type: 'step_start' | 'step_complete' | 'step_update' | 'substep_add';
+  data: any;
+}
+
+interface ThreadStats {
+  active: EnhancedProgressStep[];
+  completed: EnhancedProgressStep[];
+  total: number;
+  enhancedModeActive: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -24,7 +57,9 @@ export class WebsocketService {
   private socket!: Socket;
   private messageSubject: Subject<ChatMessage> = new Subject<ChatMessage>();
   private progressSubject: Subject<ProgressEvent> = new Subject<ProgressEvent>();
+  private enhancedProgressSubject: Subject<EnhancedProgressEvent> = new Subject<EnhancedProgressEvent>();
   private connectionStatus: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+  private enhancedModeStatus: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
   private threadId: string = '';
 
   constructor() { 
@@ -58,6 +93,25 @@ export class WebsocketService {
     this.socket.on('processing_progress', (data: ProgressEvent) => {
       console.log('Progress update received:', data);
       this.progressSubject.next(data);
+    });
+
+    this.socket.on('enhanced_progress_step', (data: EnhancedProgressEvent) => {
+      console.log('Enhanced progress step received:', data);
+      this.enhancedProgressSubject.next(data);
+    });
+
+    this.socket.on('enhanced_mode_changed', (data: any) => {
+      console.log('Enhanced mode changed:', data);
+      this.enhancedModeStatus.next(data.enabled);
+    });
+
+    this.socket.on('thread_stats', (data: any) => {
+      console.log('Thread stats received:', data);
+      // Emit as a special enhanced progress event
+      this.enhancedProgressSubject.next({
+        type: 'thread_stats' as any,
+        data: data
+      });
     });
 
     this.socket.on('error_message', (data: ChatMessage) => {
@@ -96,6 +150,32 @@ export class WebsocketService {
 
   public getProgressEvents(): Observable<ProgressEvent> {
     return this.progressSubject.asObservable();
+  }
+
+  public getEnhancedProgressEvents(): Observable<EnhancedProgressEvent> {
+    return this.enhancedProgressSubject.asObservable();
+  }
+
+  public getEnhancedModeStatus(): Observable<boolean> {
+    return this.enhancedModeStatus.asObservable();
+  }
+
+  public setEnhancedMode(enabled: boolean, threadId?: string): void {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('set_enhanced_mode', { 
+        threadId: threadId || this.threadId, 
+        enabled 
+      });
+      console.log('Enhanced mode set:', enabled, 'for thread:', threadId || this.threadId);
+    }
+  }
+
+  public getThreadStats(threadId?: string): void {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('get_thread_stats', { 
+        threadId: threadId || this.threadId 
+      });
+    }
   }
 
   public disconnect(): void {

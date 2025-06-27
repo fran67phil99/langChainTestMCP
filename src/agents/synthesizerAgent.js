@@ -38,21 +38,51 @@ async function runSynthesizerAgent(originalQuery, executionContext, plan) {
         ${JSON.stringify(plan, null, 2)}
         \`\`\`
 
+        **CRITICAL FORMATTING REQUIREMENTS:**
+        You MUST follow this exact structure for your response:
+
+        1. **Brief Overview/Introduction** - Start with a clear, emoji-enhanced summary paragraph
+        2. **Main Content Sections** - Use clear ## headings to organize information
+        3. **Data Presentation** - Use bullet points, numbered lists, and tables for structured data
+        4. **Key Statistics/Highlights** - Emphasize important numbers and insights
+        5. **Summary/Conclusion** - End with actionable insights or next steps
+
+        **SPECIFIC FORMATTING RULES:**
+        - Always use descriptive headings like "## Universal Titles Overview" or "## Latest Issues and Sales Dates"
+        - Present lists as clean bullet points with consistent formatting
+        - Use **bold** for important numbers, dates, and key information
+        - Include relevant emojis (📊, ✅, 📋, etc.) but don't overuse them
+        - Group related information logically under clear sections
+        - Use "Issue X for..." format for version/issue information
+        - Always include total counts and summary statistics
+        - End with a professional summary paragraph
+
+        **Example Structure:**
+        📊 **[Topic] Overview**
+        A total of X [items] are currently [status], showcasing [key characteristics]. The [items] include:
+        
+        • Item 1 - Description
+        • Item 2 - Description
+        [etc.]
+
+        ## [Section Title]
+        The [data type] for these [items] vary, with the most recent being [specific detail]. Other notable [details] include:
+        
+        • **Issue X** for [Item] (Latest [Data]: [Date])
+        • **Issue Y** for [Item] (Latest [Data]: [Date])
+        [etc.]
+
+        ## Summary of [Key Metric]
+        The [summary information] with [key insights]. In summary, [conclusion with business value].
+
         **Your Task:**
-        1.  Carefully analyze the user's original question.
-        2.  Review the data in the "Execution Context".
-        3.  Understand how the "Executed Plan" led to the collected data.
-        4.  Synthesize a single, clear, and helpful answer in the same language as the original question.
-        5.  **DO NOT** just list the results. Weave them into a natural sentence.
-        6.  **DO NOT** mention the plan, the steps, or the variable names (like 'reparto_top' or 'eta_media'). The user should feel like they are talking to a single, intelligent assistant.
-
-        **Example:**
-        -   **Original Question:** "What is the department with the most interns, and what is the average age of its employees?"
-        -   **Execution Context:** \`{"reparto_top": "Engineering", "eta_media": "34"}\`
-        -   **Correct Synthesized Answer:** "The department with the most interns is Engineering, and the average age of its employees is 34."
-        -   **Incorrect Answer:** "The result for reparto_top is Engineering. The result for eta_media is 34."
-
-        Now, provide the synthesized answer for the given question and context.
+        1. Carefully analyze the user's original question
+        2. Review the data in the "Execution Context" 
+        3. Understand how the "Executed Plan" led to the collected data
+        4. Synthesize a comprehensive answer following the EXACT formatting structure above
+        5. **DO NOT** mention the plan, steps, or variable names - the user should feel like they're talking to a single intelligent assistant
+        6. Use the same language as the original question
+        7. Ensure the response is scannable with clear visual hierarchy
 
         **Final Answer:**
     `;

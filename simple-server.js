@@ -21,6 +21,11 @@ const { detectLanguageFromResponse, translateProgressLogs, translateLogMessage, 
 const { a2aLogger } = require('./src/utils/a2aLogger');
 console.log('✅ Log translator loaded successfully');
 
+// Import enhanced progress system (maintains compatibility)
+console.log('📁 Loading enhanced progress system...');
+const { progressBridge } = require('./src/utils/progressBridge');
+console.log('✅ Enhanced progress system loaded successfully');
+
 // Import MCP management routes
 const mcpRoutes = require('./src/routes/mcpRoutes');
 
@@ -35,6 +40,10 @@ const io = new SocketIOServer(server, {
     credentials: true
   }
 });
+
+// Initialize enhanced progress system
+progressBridge.init(io);
+console.log('✅ Progress Bridge initialized with Socket.IO');
 
 app.use(cors({
   origin: ["http://localhost:4200", "http://127.0.0.1:4200"],
@@ -53,6 +62,51 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     mcp_server: process.env.MCP_BASE_URL,
     node_env: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Enhanced progress control endpoints
+app.get('/api/progress/status', (req, res) => {
+  res.json({
+    enhancedMode: progressBridge.enhancedMode,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/api/progress/enhanced-mode', (req, res) => {
+  const { enabled } = req.body;
+  progressBridge.setEnhancedMode(enabled === true);
+  res.json({
+    success: true,
+    enhancedMode: progressBridge.enhancedMode,
+    message: `Enhanced mode ${enabled ? 'enabled' : 'disabled'}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/api/progress/thread-enhanced-mode', (req, res) => {
+  const { threadId, enabled } = req.body;
+  if (!threadId) {
+    return res.status(400).json({ error: 'threadId is required' });
+  }
+  
+  progressBridge.setThreadEnhancedMode(threadId, enabled === true);
+  res.json({
+    success: true,
+    threadId,
+    enhancedMode: enabled,
+    message: `Enhanced mode ${enabled ? 'enabled' : 'disabled'} for thread ${threadId}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/progress/thread-stats/:threadId', (req, res) => {
+  const { threadId } = req.params;
+  const stats = progressBridge.getThreadStats(threadId);
+  res.json({
+    threadId,
+    stats,
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -171,6 +225,7 @@ async function quickDetectLanguage(userInput) {
 }
 
 // Enhanced function to emit progress events to client with multilingual support
+// Now uses ProgressBridge for backward compatibility and enhanced features
 async function emitProgress(socket, threadId, step, details = {}) {
   // Get or detect user language for this thread
   let userLanguage = userLanguageCache.get(threadId) || 'it';
@@ -186,6 +241,14 @@ async function emitProgress(socket, threadId, step, details = {}) {
     }
   }
   
+  // Prepare details with translated message and language
+  const enhancedDetails = {
+    ...details,
+    message: translatedMessage,
+    language: userLanguage
+  };
+  
+  // Store in buffer for backup (maintain existing behavior)
   const progressEvent = {
     threadId,
     step,
@@ -197,14 +260,13 @@ async function emitProgress(socket, threadId, step, details = {}) {
     details: details.details || {}
   };
   
-  // Store in buffer for backup
   if (!progressLogsBuffer.has(threadId)) {
     progressLogsBuffer.set(threadId, []);
   }
   progressLogsBuffer.get(threadId).push(progressEvent);
   
-  socket.emit('processing_progress', progressEvent);
-  console.log(`📡 Progress emitted (${userLanguage}): ${step} - ${translatedMessage}`);
+  // Use ProgressBridge for unified progress handling
+  await progressBridge.emitProgress(socket, threadId, step, enhancedDetails);
 }
 
 // Enhanced A2A log emitter for agent-to-agent communication
@@ -234,7 +296,29 @@ io.on('connection', (socket) => {
   // Add debugging for all socket events
   socket.onAny((eventName, ...args) => {
     console.log(`🔍 Socket event received: ${eventName}`, args);
-  });  socket.on('user_message', async (data) => {
+  });
+
+  // Enhanced progress control via socket
+  socket.on('set_enhanced_mode', (data) => {
+    const { threadId, enabled } = data;
+    if (threadId) {
+      progressBridge.setThreadEnhancedMode(threadId, enabled);
+      console.log(`🔧 Enhanced mode ${enabled ? 'enabled' : 'disabled'} for thread ${threadId} via socket`);
+      socket.emit('enhanced_mode_changed', { threadId, enabled });
+    } else {
+      progressBridge.setEnhancedMode(enabled);
+      console.log(`🔧 Enhanced mode ${enabled ? 'enabled' : 'disabled'} globally via socket`);
+      socket.emit('enhanced_mode_changed', { global: true, enabled });
+    }
+  });
+
+  socket.on('get_thread_stats', (data) => {
+    const { threadId } = data;
+    const stats = progressBridge.getThreadStats(threadId);
+    socket.emit('thread_stats', { threadId, stats });
+  });
+
+  socket.on('user_message', async (data) => {
     try {
       console.log(`📨 Socket: Raw data received:`, data);
       const { message, threadId } = data;

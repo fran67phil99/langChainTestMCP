@@ -39,7 +39,7 @@ async function testAzureMCPConfiguration() {
     try {
         // Leggi la configurazione MCP
         const fs = require('fs');
-        const mcpConfig = JSON.parse(fs.readFileSync('./mcp_servers.json', 'utf8'));
+        const mcpConfig = JSON.parse(fs.readFileSync('./mcp_servers_standard.json', 'utf8'));
         
         // Trova il server Azure
         const azureServer = mcpConfig.servers.find(server => server.id === 'azure_server');

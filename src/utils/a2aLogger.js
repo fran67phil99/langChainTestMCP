@@ -1,5 +1,6 @@
 // A2A Logger - Sistema per tracciare le comunicazioni Agent-to-Agent
 const { createA2ALog } = require('../utils/logTranslator');
+const { enhancedProgressLogger } = require('./enhancedProgressLogger');
 
 /**
  * Sistema per tracciare e loggare le comunicazioni A2A tra agenti
@@ -26,6 +27,22 @@ class A2ALogger {
     
     this.addLog(threadId, log);
     console.log(`🤝 A2A: ${fromAgent} delegates "${operation}" to ${toAgent}`);
+    
+    // Emit enhanced progress event for A2A delegation
+    enhancedProgressLogger.emitSubstep(threadId, {
+      type: 'a2a_delegation',
+      title: `${fromAgent} → ${toAgent}`,
+      description: `Delegating ${operation}`,
+      status: 'in_progress',
+      details: {
+        fromAgent,
+        toAgent,
+        operation,
+        delegationType: 'task_handoff',
+        ...details
+      }
+    });
+    
     return log;
   }
   
@@ -47,6 +64,24 @@ class A2ALogger {
     
     this.addLog(threadId, log);
     console.log(`✅ A2A: ${fromAgent} returns "${operation}" results to ${toAgent}`);
+    
+    // Emit enhanced progress event for A2A completion
+    enhancedProgressLogger.emitSubstep(threadId, {
+      type: 'a2a_completion',
+      title: `${fromAgent} → ${toAgent}`,
+      description: `Completed ${operation}`,
+      status: result.success !== false ? 'completed' : 'failed',
+      details: {
+        fromAgent,
+        toAgent,
+        operation,
+        delegationType: 'result_return',
+        success: result.success !== false,
+        resultType: typeof result,
+        ...result
+      }
+    });
+    
     return log;
   }
   
@@ -66,6 +101,22 @@ class A2ALogger {
     
     this.addLog(threadId, log);
     console.log(`🔧 A2A: ${fromAgent} → ${toAgent} executing "${specificOperation}"`);
+    
+    // Emit enhanced progress event for specific A2A operation
+    enhancedProgressLogger.emitSubstep(threadId, {
+      type: 'a2a_operation',
+      title: `${fromAgent} → ${toAgent}`,
+      description: `Executing ${specificOperation}`,
+      status: 'in_progress',
+      details: {
+        fromAgent,
+        toAgent,
+        operation: specificOperation,
+        delegationType: 'specific_operation',
+        ...details
+      }
+    });
+    
     return log;
   }
   

@@ -5,9 +5,18 @@
       <h3>Assistente AI</h3>
       <p>{{ isConnected ? 'Online' : 'Disconnesso' }}</p>
     </div>
-    <div class="connection-status">
-      <div class="status-indicator" *ngIf="isConnected"></div>
-      <span *ngIf="isConnected">Connesso</span>
+    <div class="header-controls">
+      <button 
+        class="enhanced-mode-toggle"
+        [class.active]="enhancedModeEnabled"
+        (click)="toggleEnhancedMode()"
+        title="Attiva/Disattiva modalità di visualizzazione avanzata">
+        {{ enhancedModeEnabled ? '🎯' : '📊' }}
+      </button>
+      <div class="connection-status">
+        <div class="status-indicator" *ngIf="isConnected"></div>
+        <span *ngIf="isConnected">Connesso</span>
+      </div>
     </div>
   </div>
 
@@ -32,6 +41,68 @@
         <div *ngIf="!message.isUser && message.isProcessing" class="message-processing">
           <div class="processing-content message-text processing" [innerHTML]="message.htmlContent"></div>
           
+          <!-- Enhanced Timeline Real-Time (durante elaborazione) -->
+          <div *ngIf="message.enhancedSteps && message.enhancedSteps.length > 0 && enhancedModeEnabled" 
+               class="enhanced-process-section processing-timeline">
+            <div class="enhanced-process-header">
+              <span class="enhanced-process-title">⚡ Live Processing</span>
+              <span class="enhanced-process-badge processing">Live</span>
+            </div>
+            
+            <div class="enhanced-timeline">
+              <div *ngFor="let step of message.enhancedSteps; trackBy: trackByStepId" 
+                   class="enhanced-step" 
+                   [ngClass]="getEnhancedStepStatusClass(step.status)">
+                
+                <!-- Step Header -->
+                <div class="enhanced-step-header">
+                  <div class="step-icon">{{ getEnhancedStepIcon(step.status) }}</div>
+                  <div class="step-info">
+                    <div class="step-title">{{ step.title }}</div>
+                    <div class="step-description" *ngIf="step.description">{{ step.description }}</div>
+                  </div>
+                  <div class="step-timing">
+                    <span class="step-start-time">{{ formatEnhancedTimestamp(step.startTime) }}</span>
+                    <span class="step-duration" *ngIf="step.endTime">{{ calculateStepDuration(step) }}</span>
+                  </div>
+                </div>
+
+                <!-- Sub-steps (A2A Interactions) -->
+                <div class="enhanced-substeps" *ngIf="step.subSteps && step.subSteps.length > 0">
+                  <div *ngFor="let subStep of step.subSteps" 
+                       class="enhanced-substep" 
+                       [ngClass]="getSubStepClass(subStep)">
+                    <span class="substep-icon">{{ getSubStepIcon(subStep.status) }}</span>
+                    
+                    <!-- A2A Interaction Display -->
+                    <div *ngIf="isA2AInteraction(subStep)" class="a2a-interaction">
+                      <div class="a2a-header">
+                        <span class="a2a-agents">{{ subStep.title }}</span>
+                        <span class="a2a-type">{{ getA2ATypeLabel(subStep.details?.delegationType) }}</span>
+                      </div>
+                      <div class="a2a-operation">{{ subStep.description }}</div>
+                      <div class="a2a-details" *ngIf="subStep.details?.operation">
+                        <span class="operation-name">{{ subStep.details?.operation }}</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Regular Substep Display -->
+                    <div *ngIf="!isA2AInteraction(subStep)" class="regular-substep">
+                      <span class="substep-message">{{ subStep.message }}</span>
+                    </div>
+                    
+                    <span class="substep-time">{{ formatEnhancedTimestamp(subStep.timestamp) }}</span>
+                  </div>
+                </div>
+
+                <!-- Final Message (se presente) -->
+                <div class="step-final-message" *ngIf="step.finalMessage">
+                  {{ step.finalMessage }}
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <!-- Progress bar durante elaborazione -->
           <div class="processing-progress" *ngIf="message.progressPercentage">
             <div class="progress-bar">
@@ -42,18 +113,65 @@
         
         <!-- Per messaggi AI completati -->
         <div *ngIf="!message.isUser && !message.isProcessing" class="message-completed">
-          <!-- Sezione processo elaborativo (se ci sono log) -->
-          <div *ngIf="message.progressLogs && message.progressLogs.length > 0" 
-               class="process-section">
-            <div class="process-header" (click)="toggleProcessLogs(message)">
-              <span class="process-title">{{ getProcessTitle(message.processLanguage) }}</span>
-              <span class="process-toggle" [class.expanded]="message.showProcessLogs">▼</span>
-            </div>            <!-- Log dettagliato (espandibile) -->
-            <div class="process-logs" [class.expanded]="message.showProcessLogs" *ngIf="message.progressLogs && message.progressLogs.length > 0">
-              <div *ngFor="let log of message.progressLogs" class="process-log-entry">
-                <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
-                <span class="log-step">{{ getLogStepName(log.step) }}</span>
-                <span class="log-message">{{ log.message }}</span>
+          <!-- Enhanced Progress Timeline (quando enhanced mode è attivo) -->
+          <div *ngIf="message.enhancedSteps && message.enhancedSteps.length > 0 && enhancedModeEnabled" 
+               class="enhanced-process-section">
+            <div class="enhanced-process-header" (click)="toggleEnhancedDetails(message)">
+              <span class="enhanced-process-title">🚀 Processing Timeline</span>
+              <span class="enhanced-process-badge">Enhanced</span>
+              <span class="enhanced-toggle" [class.expanded]="message.showEnhancedDetails">▼</span>
+            </div>
+            
+            <div class="enhanced-timeline" *ngIf="message.showEnhancedDetails">
+              <div *ngFor="let step of message.enhancedSteps; trackBy: trackByStepId" 
+                   class="enhanced-step" 
+                   [ngClass]="getEnhancedStepStatusClass(step.status)">
+                
+                <!-- Step Header -->
+                <div class="enhanced-step-header">
+                  <div class="step-icon">{{ getEnhancedStepIcon(step.status) }}</div>
+                  <div class="step-info">
+                    <div class="step-title">{{ step.title }}</div>
+                    <div class="step-description" *ngIf="step.description">{{ step.description }}</div>
+                  </div>
+                  <div class="step-timing">
+                    <span class="step-start-time">{{ formatEnhancedTimestamp(step.startTime) }}</span>
+                    <span class="step-duration" *ngIf="step.endTime">{{ calculateStepDuration(step) }}</span>
+                  </div>
+                </div>
+
+                <!-- Sub-steps (A2A Interactions) -->
+                <div class="enhanced-substeps" *ngIf="step.subSteps && step.subSteps.length > 0">
+                  <div *ngFor="let subStep of step.subSteps" 
+                       class="enhanced-substep" 
+                       [ngClass]="getSubStepClass(subStep)">
+                    <span class="substep-icon">{{ getSubStepIcon(subStep.status) }}</span>
+                    
+                    <!-- A2A Interaction Display -->
+                    <div *ngIf="isA2AInteraction(subStep)" class="a2a-interaction">
+                      <div class="a2a-header">
+                        <span class="a2a-agents">{{ subStep.title }}</span>
+                        <span class="a2a-type">{{ getA2ATypeLabel(subStep.details?.delegationType) }}</span>
+                      </div>
+                      <div class="a2a-operation">{{ subStep.description }}</div>
+                      <div class="a2a-details" *ngIf="subStep.details?.operation">
+                        <span class="operation-name">{{ subStep.details?.operation }}</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Regular Substep Display -->
+                    <div *ngIf="!isA2AInteraction(subStep)" class="regular-substep">
+                      <span class="substep-message">{{ subStep.message }}</span>
+                    </div>
+                    
+                    <span class="substep-time">{{ formatEnhancedTimestamp(subStep.timestamp) }}</span>
+                  </div>
+                </div>
+
+                <!-- Final Message (se presente) -->
+                <div class="step-final-message" *ngIf="step.finalMessage">
+                  {{ step.finalMessage }}
+                </div>
               </div>
             </div>
           </div>

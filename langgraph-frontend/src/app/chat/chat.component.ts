@@ -15,6 +15,9 @@ interface ChatMessage {
   progressLogs?: ProgressEvent[];
   showProcessLogs?: boolean;
   processLanguage?: string; // Per tradurre "Processo Elaborativo"
+  enhancedSteps?: EnhancedProgressStep[]; // Nuovi step enhanced
+  showEnhancedProgress?: boolean; // Controllo visualizzazione enhanced
+  showEnhancedDetails?: boolean; // Controllo visualizzazione dettagli enhanced (default: true)
 }
 
 interface ProgressEvent {
@@ -24,6 +27,42 @@ interface ProgressEvent {
   timestamp: string;
   agent?: string;
   userQuery?: string;
+}
+
+interface EnhancedProgressStep {
+  id: string;
+  threadId: string;
+  title: string;
+  description: string;
+  status: 'running' | 'success' | 'error' | 'warning';
+  startTime: string;
+  endTime?: string;
+  subSteps: EnhancedSubStep[];
+  language: string;
+  stepNumber: number;
+  finalMessage?: string;
+}
+
+interface EnhancedSubStep {
+  id: string;
+  message: string;
+  status: 'info' | 'success' | 'error' | 'warning' | 'in_progress' | 'completed' | 'failed';
+  timestamp: string;
+  type?: string;
+  title?: string;
+  description?: string;
+  details?: {
+    fromAgent?: string;
+    toAgent?: string;
+    operation?: string;
+    delegationType?: string;
+    [key: string]: any;
+  };
+}
+
+interface EnhancedProgressEvent {
+  type: 'step_start' | 'step_complete' | 'step_update' | 'substep_add';
+  data: any;
 }
 
 @Component({
@@ -42,6 +81,10 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
   private hasConnectedOnce: boolean = false; // Flag per tracciare la prima connessione
     // Global progress tracking for current processing
   currentProcessingMessageId: string | null = null;
+  
+  // Enhanced progress tracking
+  enhancedModeEnabled: boolean = true; // Abilitato di default
+  currentEnhancedSteps: Map<string, EnhancedProgressStep> = new Map();
   
   // Auto-scroll control
   private shouldAutoScroll: boolean = true;
@@ -109,6 +152,17 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
     // Subscribe to progress events
     this.websocketService.getProgressEvents().subscribe((progressEvent) => {
       this.handleProgressEvent(progressEvent);
+    });
+
+    // Subscribe to enhanced progress events
+    this.websocketService.getEnhancedProgressEvents().subscribe((enhancedEvent) => {
+      this.handleEnhancedProgressEvent(enhancedEvent);
+    });
+
+    // Subscribe to enhanced mode status
+    this.websocketService.getEnhancedModeStatus().subscribe((enabled) => {
+      this.enhancedModeEnabled = enabled;
+      console.log('Enhanced mode status:', enabled);
     });
   }
   ngAfterViewInit(): void {
@@ -179,7 +233,8 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       isUser: isUser,
       timestamp: new Date(),
       isProcessing: false,
-      progressLogs: []
+      progressLogs: [],
+      showEnhancedDetails: true // Default: mostra i dettagli enhanced
     };
 
     if (!isUser) {
@@ -214,6 +269,74 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       this.createProcessingMessage();
     }
   }
+
+  // Enhanced Progress Control Methods
+  toggleEnhancedMode(): void {
+    const newMode = !this.enhancedModeEnabled;
+    this.websocketService.setEnhancedMode(newMode);
+    console.log('Toggling enhanced mode to:', newMode);
+  }
+
+  getEnhancedModeStatus(): boolean {
+    return this.enhancedModeEnabled;
+  }
+
+  // Enhanced Progress Utility Methods
+  getEnhancedStepIcon(status: string): string {
+    switch (status) {
+      case 'running': return '⏳';
+      case 'success': return '✅';
+      case 'error': return '❌';
+      case 'warning': return '⚠️';
+      default: return '📋';
+    }
+  }
+
+  getEnhancedStepStatusClass(status: string): string {
+    return `enhanced-step-${status}`;
+  }
+
+  getSubStepIcon(status: string): string {
+    switch (status) {
+      case 'info': return '📝';
+      case 'success': return '✅';
+      case 'error': return '❌';
+      case 'warning': return '⚠️';
+      case 'in_progress': return '⏳';
+      case 'completed': return '✅';
+      case 'failed': return '❌';
+      default: return '•';
+    }
+  }
+
+  // A2A Interaction Detection and Display Methods
+  isA2AInteraction(subStep: any): boolean {
+    if (!subStep.details) return false;
+    return subStep.type && (
+      subStep.type === 'a2a_delegation' ||
+      subStep.type === 'a2a_completion' ||
+      subStep.type === 'a2a_operation'
+    );
+  }
+
+  getSubStepClass(subStep: any): string {
+    if (this.isA2AInteraction(subStep)) {
+      return `substep-a2a substep-${subStep.type}`;
+    }
+    return `substep-${subStep.status || 'info'}`;
+  }
+
+  getA2ATypeLabel(delegationType: string | undefined): string {
+    if (!delegationType) return '🔄 Interazione';
+    
+    const labels: { [key: string]: string } = {
+      'task_handoff': '📤 Delega Task',
+      'result_return': '📥 Ritorno Risultato',
+      'specific_operation': '🔧 Operazione Specifica'
+    };
+    return labels[delegationType] || '🔄 Interazione';
+  }
+
   private createProcessingMessage(): void {
     const messageId = this.generateMessageId();
     const processingMessage: ChatMessage = {
@@ -226,7 +349,8 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       progressPercentage: 0,
       progressLogs: [],
       showProcessLogs: false,
-      processLanguage: 'it' // Default, verrà aggiornato dall'agente di lingua
+      processLanguage: 'it', // Default, verrà aggiornato dall'agente di lingua
+      showEnhancedDetails: true // Default: mostra i dettagli enhanced
     };
     
     // Set as HTML content in italics for processing with indicator
@@ -296,6 +420,68 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       if (!this.isProcessingQueue) {
         this.processProgressQueue();
       }
+    }
+  }
+
+  private handleEnhancedProgressEvent(enhancedEvent: EnhancedProgressEvent): void {
+    console.log('Enhanced progress event received:', enhancedEvent);
+    
+    if (!this.currentProcessingMessageId || !this.enhancedModeEnabled) return;
+    
+    const processingMessage = this.messages.find(msg => 
+      msg.id === this.currentProcessingMessageId && msg.isProcessing
+    );
+    
+    if (!processingMessage) return;
+    
+    // Initialize enhanced steps array if not exists
+    processingMessage.enhancedSteps = processingMessage.enhancedSteps || [];
+    processingMessage.showEnhancedProgress = true;
+    
+    switch (enhancedEvent.type) {
+      case 'step_start':
+        const newStep = enhancedEvent.data as EnhancedProgressStep;
+        processingMessage.enhancedSteps.push(newStep);
+        this.currentEnhancedSteps.set(newStep.id, newStep);
+        break;
+        
+      case 'step_complete':
+        const completedStep = enhancedEvent.data as EnhancedProgressStep;
+        this.updateEnhancedStep(processingMessage, completedStep);
+        this.currentEnhancedSteps.delete(completedStep.id);
+        break;
+        
+      case 'step_update':
+        const updatedStep = enhancedEvent.data as EnhancedProgressStep;
+        this.updateEnhancedStep(processingMessage, updatedStep);
+        this.currentEnhancedSteps.set(updatedStep.id, updatedStep);
+        break;
+        
+      case 'substep_add':
+        const { parentStepId, subStep } = enhancedEvent.data;
+        this.addSubStepToEnhancedStep(processingMessage, parentStepId, subStep);
+        break;
+    }
+    
+    // Auto-scroll if needed
+    setTimeout(() => this.scrollToBottom(), 100);
+  }
+
+  private updateEnhancedStep(message: ChatMessage, updatedStep: EnhancedProgressStep): void {
+    if (!message.enhancedSteps) return;
+    
+    const index = message.enhancedSteps.findIndex(step => step.id === updatedStep.id);
+    if (index !== -1) {
+      message.enhancedSteps[index] = updatedStep;
+    }
+  }
+
+  private addSubStepToEnhancedStep(message: ChatMessage, parentStepId: string, subStep: any): void {
+    if (!message.enhancedSteps) return;
+    
+    const parentStep = message.enhancedSteps.find(step => step.id === parentStepId);
+    if (parentStep) {
+      parentStep.subSteps.push(subStep);
     }
   }
 
@@ -381,6 +567,20 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
     setTimeout(() => {
       this.userInteracting = false;
       // Controlla se l'utente è ancora in fondo alla chat
+      this.checkIfShouldAutoScroll();
+    }, 500);
+  }
+
+  toggleEnhancedDetails(message: ChatMessage): void {
+    // Blocca completamente l'auto-scroll durante l'interazione
+    this.shouldAutoScroll = false;
+    this.userInteracting = true;
+    
+    message.showEnhancedDetails = !message.showEnhancedDetails;
+    
+    // Ripristina auto-scroll dopo un delay più lungo e solo se l'utente è in fondo
+    setTimeout(() => {
+      this.userInteracting = false;
       this.checkIfShouldAutoScroll();
     }, 500);
   }
@@ -537,5 +737,28 @@ export class ChatComponent implements OnInit, AfterViewChecked, AfterViewInit {
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  }
+
+  formatEnhancedTimestamp(timestamp: string): string {
+    return new Date(timestamp).toLocaleTimeString('it-IT', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+  }
+
+  calculateStepDuration(step: EnhancedProgressStep): string {
+    if (!step.endTime) return '';
+    
+    const start = new Date(step.startTime);
+    const end = new Date(step.endTime);
+    const duration = end.getTime() - start.getTime();
+    
+    if (duration < 1000) return `${duration}ms`;
+    return `${(duration / 1000).toFixed(1)}s`;
+  }
+
+  trackByStepId(index: number, step: EnhancedProgressStep): string {
+    return step.id;
   }
 }

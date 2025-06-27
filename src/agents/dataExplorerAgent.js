@@ -596,83 +596,66 @@ SQL Query executed: ${sqlQuery}
 
 Raw data from database: ${jsonString}
 
-CRITICAL FORMATTING INSTRUCTIONS:
-1. Detect the language of the user's query.
-2. Respond in the same language as the user's query.
-3. NEVER show raw JSON data to the user.
-4. ALWAYS format tabular data as clean Markdown tables with proper headers.
-5. For lists, use bullet points or numbered lists.
-6. For single records, use key-value pairs in readable format.
-7. Limit tables to 20 rows and 10 columns for readability.
-8. If data exceeds limits, mention how many total records/columns exist.
-9. **STICK TO THE DATA**: NEVER invent, guess, or assume information not explicitly present in the "Raw data from database". If a detail (like an issue number or a specific date) is not in the data, you MUST state that it is not available (e.g., "Issue number: Not found in data"). Your primary duty is accuracy.
+CRITICAL FORMATTING REQUIREMENTS - FOLLOW THIS EXACT STRUCTURE:
 
-ADVANCED DATA ANALYSIS REQUIREMENTS:
-- For single records: Show all field values clearly with proper labels
-- For multiple records: Provide comprehensive statistical insights
-- Calculate and show meaningful statistics: unique values, frequencies, distributions
-- For dates: Show date ranges, most recent, oldest entries
-- For categories: Show distribution and percentages
-- For text fields: Show unique values and their occurrence counts
-- For numerical data: Provide statistics (sum, average, min/max, range)
-- Identify patterns, trends, and notable observations
-- Group similar data and show meaningful breakdowns
-- Show temporal patterns if dates are available
-- Highlight interesting insights and anomalies
+**FORMAT TEMPLATE (MANDATORY):**
 
-ENHANCED STATISTICAL ANALYSIS:
-- Always show total record count
-- Show unique value counts for categorical data
-- Calculate percentages for categorical distributions
-- Show date ranges and temporal patterns
-- Identify most/least common values
-- Show data completeness (missing values if any)
-- Provide business insights based on the data patterns
+📊 **[Topic] Overview**
+A total of [X] [items] [status description], showcasing [key characteristics]. The [items] include:
 
-For queries about specific topics (like Knight Rider), provide:
-- Total records found
-- Breakdown by all available dimensions (market, language, component, channel, etc.)
-- Date distribution and temporal analysis
-- Most common patterns and trends
-- Data quality and completeness analysis
+[List items in bullet format with proper formatting]
 
-Format the response as:
-- A brief summary with emoji of what was found (use specific numbers and key insights)
-- Key statistics section with meaningful business metrics
-- The data presented as a comprehensive Markdown table with the most important columns
-- Detailed data breakdown section with:
-  * Distribution by categories (market, language, component, channel, etc.)
-  * Temporal analysis if dates are present
-  * Data patterns and value distributions
-  * Data quality metrics (completeness, uniqueness, consistency)
-  * Interesting observations and anomalies in the data
-- Technical details (SQL query) in a collapsible section
-- Additional exploration suggestions based on data characteristics
+## [Main Data Section Title]
+The [data description] for these [items] vary, with the most recent being [specific detail]. Other notable [details] include:
 
-COLUMN PRIORITIZATION:
-When displaying tables, prioritize columns in this order:
-1. Primary identifiers (ID, Title, Name)
-2. Business-critical fields (Market, Language, Component, Channel)
-3. Temporal fields (dates, timestamps)
-4. Descriptive fields (descriptions, categories)
-5. Technical fields (last priority)
+• **[Item 1]** for [Details] (Latest [Info]: [Date/Value])
+• **[Item 2]** for [Details] (Latest [Info]: [Date/Value])
+[Continue with consistent formatting]
 
-Show maximum 8-10 most relevant columns in the main table to avoid overwhelming the user.
+## Summary of [Key Metric]
+The [analysis] reveal [key insights]. [Summary statement with business value/conclusions].
 
-Use professional business tone and appropriate emojis for visual appeal.
+**SPECIFIC FORMATTING RULES:**
+1. Always start with an emoji and descriptive overview paragraph with total counts
+2. Use clear ## section headings (like "Latest Issues and Sales Dates", "Universal Titles Overview")
+3. Present data as structured bullet points, not narrative paragraphs
+4. Use **bold** for all important numbers, titles, and key information
+5. Include specific numbers and statistics prominently
+6. Use consistent formatting for repeated items
+7. End with a professional summary paragraph
+8. Group related information under logical section headings
+9. NEVER show raw JSON data to the user
+10. Always format tabular data as clean Markdown tables with proper headers
+11. Detect the language of the user's query and respond in the same language
+12. **STICK TO THE DATA**: NEVER invent information not in the raw data
 
-EXAMPLE FORMATS:
-For tabular data: Use proper Markdown table syntax with | separators
-For lists: Use • bullet points or numbered lists
-For single values: Use **Label:** Value format
-For empty results: Explain what was searched and suggest alternatives
+ENHANCED STATISTICAL ANALYSIS (integrate into sections):
+- Always show total record count in opening
+- Show unique value counts and percentages for categories
+- Identify most/least common values with specific numbers
+- Show date ranges and temporal patterns clearly
+- Provide business insights based on data patterns
+- Include data completeness and quality observations
 
-If the data is empty, null, or shows an error, explain that no results were found and suggest:
-- Checking available tables: ${schema.tables.join(', ')}
-- Verifying the query syntax
-- Trying a different approach
+**EXAMPLE STRUCTURE TO FOLLOW:**
+📊 **Universal Titles Overview**
+A total of 17 unique titles are currently being published, showcasing a variety of themes including vehicles, movies, and collectibles. The titles include:
 
-Remember: NO RAW JSON should ever be visible to the user. Always convert data to human-readable format.`;
+• 9U - Knight Rider Car Build Up
+• H7 - Back to the Future Delorean Build Up
+[etc.]
+
+## Latest Issues and Sales Dates
+The latest issues for these titles vary, with the most recent being Issue 606 of P752 - DELOREAN 1E (POR)-P752, which was sold on 31/08/2026. Other notable latest issues include:
+
+• **Issue 606** for P752 - DELOREAN 1E (POR)-P752 (Latest Sale Date: 31/08/2026)
+• **Issue 203** for LB40 - KNIGHT RIDER B/U BEL # 1E-LB40 (Latest Sale Date: 31/12/2025)
+[etc.]
+
+## Summary of Latest Sales Dates
+In summary, the Universal titles reflect a diverse range of interests, with the latest sales data indicating ongoing popularity and engagement in these collections.
+
+Remember: The user should see a well-structured, scannable response with clear visual hierarchy, not narrative text.`;
 
   try {
     const response = await llm.invoke([new HumanMessage(formatPrompt)]);
