@@ -90,6 +90,23 @@ Rules:
 async function translateToUserLanguage(englishResponse, targetLanguage, targetLanguageName) {
   console.log(`🌍 Language Agent: Translating response to ${targetLanguageName}...`);
   
+  // Defensive check for invalid input
+  if (!englishResponse || typeof englishResponse !== 'string') {
+    console.log(`⚠️ Invalid English response provided for translation:`, englishResponse);
+    return targetLanguage === 'it' 
+      ? "Mi dispiace, non sono riuscito a generare una risposta valida."
+      : "I apologize, but I couldn't generate a valid response.";
+  }
+  
+  // Check for problematic values that shouldn't be translated literally
+  const problematicValues = ['undefined', 'null', 'NaN', '[object Object]'];
+  if (problematicValues.some(val => englishResponse.trim().toLowerCase().includes(val.toLowerCase()))) {
+    console.log(`⚠️ English response contains problematic values, providing fallback`);
+    return targetLanguage === 'it' 
+      ? "Mi dispiace, si è verificato un errore nel processamento della risposta."
+      : "I apologize, there was an error processing the response.";
+  }
+  
   // If target is English, no translation needed
   if (targetLanguage === 'en') {
     console.log(`✅ No translation needed - response already in English`);
@@ -118,15 +135,67 @@ TRANSLATED RESPONSE:`)
     ];
 
     const response = await llm.invoke(translationMessages);
-    const translatedResponse = response.content.trim();
+    let translatedResponse = response.content.trim();
+    
+    // Post-translation validation
+    if (!translatedResponse || translatedResponse.length === 0) {
+      console.log(`⚠️ Empty translation received, using fallback`);
+      return englishResponse; // Return original if translation is empty
+    }
+    
+    // Check if translation contains problematic patterns
+    const problematicPatterns = [
+      'non definito',
+      'undefined',
+      'null',
+      'NaN',
+      '[object object]',
+      'errore di traduzione'
+    ];
+    
+    if (problematicPatterns.some(pattern => translatedResponse.toLowerCase().includes(pattern))) {
+      console.log(`⚠️ Translation contains problematic content: "${translatedResponse}"`);
+      console.log(`🔄 Using fallback response in ${targetLanguageName}`);
+      
+      // Provide appropriate fallback based on target language
+      switch (targetLanguage) {
+        case 'it':
+          translatedResponse = "Mi dispiace, non sono riuscito a fornire una risposta completa. Ti prego di riprovare.";
+          break;
+        case 'fr':
+          translatedResponse = "Je suis désolé, je n'ai pas pu fournir une réponse complète. Veuillez réessayer.";
+          break;
+        case 'es':
+          translatedResponse = "Lo siento, no pude proporcionar una respuesta completa. Por favor, inténtalo de nuevo.";
+          break;
+        case 'de':
+          translatedResponse = "Es tut mir leid, ich konnte keine vollständige Antwort geben. Bitte versuchen Sie es erneut.";
+          break;
+        default:
+          return englishResponse; // Fallback to English for unknown languages
+      }
+    }
     
     console.log(`✅ Response successfully translated to ${targetLanguageName}`);
     return translatedResponse;
     
   } catch (error) {
     console.error(`❌ Translation Error:`, error);
-    console.log(`🔄 Fallback: Returning English response due to translation error`);
-    return englishResponse;
+    console.log(`🔄 Fallback: Providing localized error message for translation failure`);
+    
+    // Provide appropriate error message based on target language instead of returning English
+    switch (targetLanguage) {
+      case 'it':
+        return "Mi dispiace, si è verificato un problema con la traduzione. Tuttavia, posso confermare che la tua richiesta è stata elaborata correttamente.";
+      case 'fr':
+        return "Je suis désolé, il y a eu un problème avec la traduction. Cependant, je peux confirmer que votre demande a été traitée correctement.";
+      case 'es':
+        return "Lo siento, hubo un problema con la traducción. Sin embargo, puedo confirmar que su solicitud fue procesada correctamente.";
+      case 'de':
+        return "Es tut mir leid, es gab ein Problem mit der Übersetzung. Ich kann jedoch bestätigen, dass Ihre Anfrage korrekt verarbeitet wurde.";
+      default:
+        return englishResponse; // Fallback to English only for unsupported languages
+    }
   }
 }
 
@@ -147,12 +216,41 @@ async function processWithLanguageSupport(userInput, processingFunction) {
     console.log(`🔄 Processing English query: "${languageInfo.translatedText}"`);
     const englishResult = await processingFunction(languageInfo.translatedText);
     
+    // Defensive check for englishResult
+    if (!englishResult || !englishResult.finalResponse) {
+      console.log(`⚠️ Processing function returned invalid result:`, englishResult);
+      
+      const fallbackMessage = languageInfo.detectedLanguage === 'it' 
+        ? "Mi dispiace, non sono riuscito a elaborare la tua richiesta al momento."
+        : "I apologize, but I couldn't process your request at this time.";
+        
+      return {
+        originalLanguage: languageInfo,
+        englishProcessing: englishResult || { response: "Processing failed", finalResponse: "Processing failed" },
+        finalResponse: fallbackMessage
+      };
+    }
+    
     // Step 3: Translate response back to user's language
     const finalResponse = await translateToUserLanguage(
       englishResult.finalResponse,
       languageInfo.detectedLanguage,
       languageInfo.languageName
     );
+    
+    // Final validation of the translated response
+    if (!finalResponse || finalResponse.trim().length === 0) {
+      console.log(`⚠️ Final response is empty, providing fallback`);
+      const fallbackMessage = languageInfo.detectedLanguage === 'it' 
+        ? "Mi dispiace, si è verificato un problema nella generazione della risposta finale."
+        : "I apologize, there was a problem generating the final response.";
+        
+      return {
+        originalLanguage: languageInfo,
+        englishProcessing: englishResult,
+        finalResponse: fallbackMessage
+      };
+    }
     
     return {
       originalLanguage: languageInfo,
@@ -162,7 +260,25 @@ async function processWithLanguageSupport(userInput, processingFunction) {
     
   } catch (error) {
     console.error(`❌ Language Processing Error:`, error);
-    throw error;
+    
+    // Provide error message in user's language if possible
+    let errorMessage = "I apologize, but there was an error processing your request.";
+    try {
+      const quickLang = await quickLanguageDetection(userInput);
+      if (quickLang === 'it') {
+        errorMessage = "Mi dispiace, si è verificato un errore durante l'elaborazione della tua richiesta.";
+      }
+    } catch (langError) {
+      console.log(`Could not detect language for error message, using English`);
+    }
+    
+    // Return structured error instead of throwing
+    return {
+      originalLanguage: { detectedLanguage: 'unknown', originalText: userInput, translatedText: userInput },
+      englishProcessing: { response: errorMessage, finalResponse: errorMessage },
+      finalResponse: errorMessage,
+      error: error.message
+    };
   }
 }
 

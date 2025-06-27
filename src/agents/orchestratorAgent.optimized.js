@@ -138,13 +138,39 @@ async function runOrchestration(userInput, threadId, chat_history = []) {
                     technical_details: "Fallback to General Agent as no valid plan was generated."
                 };
             }
-        });        const finalResponse = processingResult.finalResponse;
-        const englishProcessing = processingResult.englishProcessing;
+        });        
+        
+        // Extract and validate final response with robust fallback
+        const finalResponse = processingResult?.finalResponse;
+        const englishProcessing = processingResult?.englishProcessing;
 
         logAgentActivity('orchestrator_v2', 'completed', { finalResponse });
         
-        // Defensive check to prevent creating an AIMessage with an undefined value
-        const aiMessageContent = finalResponse || englishProcessing?.response || "I apologize, but I couldn't generate a valid response.";
+        // Enhanced defensive check with multiple fallback levels
+        let aiMessageContent;
+        
+        if (finalResponse && typeof finalResponse === 'string' && finalResponse.trim().length > 0) {
+          // Check for problematic content in the final response
+          const problematicPatterns = ['non definito', 'undefined', 'null', 'NaN'];
+          if (problematicPatterns.some(pattern => finalResponse.toLowerCase().includes(pattern))) {
+            console.log(`⚠️ Final response contains problematic content, using fallback`);
+            aiMessageContent = "Mi dispiace, si è verificato un problema nella generazione della risposta. Ti prego di riprovare la tua domanda.";
+          } else {
+            aiMessageContent = finalResponse;
+          }
+        } else if (englishProcessing?.response && typeof englishProcessing.response === 'string') {
+          aiMessageContent = englishProcessing.response;
+        } else if (englishProcessing?.finalResponse && typeof englishProcessing.finalResponse === 'string') {
+          aiMessageContent = englishProcessing.finalResponse;
+        } else {
+          // Last resort fallback
+          aiMessageContent = "Mi dispiace, non sono riuscito a generare una risposta valida. Ti prego di riprovare.";
+        }
+        
+        // Final validation to ensure we never return undefined/null
+        if (!aiMessageContent || typeof aiMessageContent !== 'string' || aiMessageContent.trim().length === 0) {
+          aiMessageContent = "Mi dispiace, si è verificato un errore tecnico. Ti prego di riprovare la tua richiesta.";
+        }
 
         // 4. Format and return the final output
         return {
@@ -160,10 +186,14 @@ async function runOrchestration(userInput, threadId, chat_history = []) {
     } catch (error) {
         console.error('❌ Orchestrator v2 Error:', error);
         logAgentActivity('orchestrator_v2', 'error', { error: error.message });
+        
+        // Provide error message in Italian since this is the primary language
+        const errorMessage = "Mi dispiace, si è verificato un errore durante l'elaborazione della tua richiesta. Ti prego di riprovare.";
+        
         return {
-            messages: [...(chat_history || []), new HumanMessage(userInput)],
+            messages: [...(chat_history || []), new HumanMessage(userInput), new AIMessage(errorMessage)],
             error: error.message,
-            finalResponse: `I'm sorry, an error occurred during orchestration: ${error.message}`
+            finalResponse: errorMessage
         };
     }
 }

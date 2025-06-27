@@ -84,8 +84,8 @@ async function runPlannerAgent(inputs) {
         ? available_tools.map(tool => `- ${tool.name}: ${tool.description || 'No description'}`).join('\n')
         : 'No tools available';
 
-    // Format chat history for the prompt  
-    const historyDescription = chat_history && chat_history.length > 0
+    // Format chat history for the prompt with defensive check
+    const historyDescription = (chat_history && Array.isArray(chat_history) && chat_history.length > 0)
         ? chat_history.map(msg => `${msg._getType ? msg._getType() : 'unknown'}: ${msg.content}`).join('\n')
         : 'No previous conversation';
 
