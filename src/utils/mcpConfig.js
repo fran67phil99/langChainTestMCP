@@ -25,13 +25,78 @@ class McpConfigManager {
       }
 
       const configContent = fs.readFileSync(this.configPath, 'utf8');
-      this.config = JSON.parse(configContent);
+      const rawConfig = JSON.parse(configContent);
+      
+      // Converti la struttura del file mcp_servers_standard.json in una struttura unificata
+      this.config = this.normalizeConfig(rawConfig);
+      
       console.log(`✅ Loaded MCP configuration with ${this.config.servers.length} servers`);
       return this.config;
     } catch (error) {
       console.error(`❌ Error loading MCP config: ${error.message}`);
       return this.getDefaultConfig();
     }
+  }
+
+  /**
+   * Normalizza la configurazione dal formato mcp_servers_standard.json
+   */
+  normalizeConfig(rawConfig) {
+    const servers = [];
+    
+    // Aggiungi server HTTP dal campo httpServers
+    if (rawConfig.httpServers && Array.isArray(rawConfig.httpServers)) {
+      for (const server of rawConfig.httpServers) {
+        servers.push({
+          id: server.id,
+          name: server.name,
+          url: server.url,
+          mcp_endpoint: server.mcp_endpoint || '/mcp',
+          tools_endpoint: server.tools_endpoint || '/tools',
+          description: server.description,
+          enabled: server.enabled !== false, // default true
+          timeout: server.timeout || 10000,
+          retry_attempts: server.retry_attempts || 3,
+          priority: server.priority || 1,
+          type: 'http'
+        });
+      }
+    }
+    
+    // Aggiungi server STDIO dal campo mcpServers (se necessario in futuro)
+    if (rawConfig.mcpServers && typeof rawConfig.mcpServers === 'object') {
+      for (const [key, server] of Object.entries(rawConfig.mcpServers)) {
+        if (server.enabled) {
+          servers.push({
+            id: key,
+            name: server.name || key,
+            command: server.command,
+            args: server.args,
+            description: server.description,
+            enabled: server.enabled !== false,
+            timeout: server.timeout || 10000,
+            retry_attempts: server.retry_attempts || 3,
+            priority: server.priority || 1,
+            type: 'stdio'
+          });
+        }
+      }
+    }
+    
+    return {
+      servers,
+      discovery: rawConfig.discovery || {
+        enabled: true,
+        timeout_per_server: 10000,
+        max_concurrent_discoveries: 3,
+        cache_ttl_minutes: 5,
+        fallback_to_mock: true
+      },
+      tools_override: rawConfig.tools_override || {
+        enabled: false,
+        custom_tools: []
+      }
+    };
   }
 
   /**
@@ -83,6 +148,17 @@ class McpConfigManager {
    * Verifica se la cache è valida per un server
    */
   isCacheValid(serverId) {
+    // Protezione contro config null/undefined
+    if (!this.config) {
+      console.warn(`⚠️ isCacheValid: Config is null, reloading for ${serverId}`);
+      this.loadConfig();
+    }
+    
+    if (!this.config || !this.config.discovery) {
+      console.warn(`⚠️ isCacheValid: Invalid config or discovery config for ${serverId}`);
+      return false;
+    }
+    
     const lastUpdate = this.lastCacheUpdate.get(serverId);
     if (!lastUpdate) return false;
 

@@ -1,6 +1,7 @@
 // SQL Schema Agent - Specialized agent for database schema discovery and query generation
 const { HumanMessage } = require('@langchain/core/messages');
 const { createTrackedLLM, logAgentActivity } = require('../utils/langsmithConfig');
+const { getGlobalMcpClient } = require('../utils/mcpUtils.commonjs');
 
 // Initialize LLM for SQL operations with LangSmith tracing
 const llm = createTrackedLLM({
@@ -17,10 +18,12 @@ const llm = createTrackedLLM({
  */
 async function runSqlSchemaAgent(request, availableTools, threadId) {
   console.log(`🗃️ SQL Schema Agent: Processing A2A request: ${request.action}`);
+  console.log(`🔧 SQL Schema Agent: Received ${availableTools ? availableTools.length : 0} tools`);
   
   logAgentActivity('sql_schema_agent', 'a2a_request_start', {
     action: request.action,
     requestFrom: request.from,
+    toolsReceived: availableTools ? availableTools.length : 0,
     threadId
   });
   
@@ -69,8 +72,21 @@ async function discoverDatabaseSchema(availableTools, threadId) {
       if (listTablesTool) {
       console.log(`🔧 Using MCP tool: ${listTablesTool.name} for schema discovery`);
       try {
-        // Correctly call the MCP tool using the call method
-        const tablesResult = await listTablesTool.call({});
+        // Use the global MCP client to call the tool
+        const mcpClient = getGlobalMcpClient();
+        
+        // Find the complete server config for this tool
+        // Since we know this server works (we found its tools), construct the config
+        const serverConfig = {
+          id: listTablesTool.serverId,
+          name: listTablesTool.serverName || listTablesTool.serverId,
+          url: "http://localhost:5009", // Known working endpoint for mauden_sql_server
+          mcp_endpoint: "/mcp", // Correct MCP endpoint
+          enabled: true,
+          timeout: 30000
+        };
+        
+        const tablesResult = await mcpClient.callTool(serverConfig, listTablesTool.name, {});
         console.log('📋 MCP tool result:', tablesResult);
         
         if (tablesResult && (Array.isArray(tablesResult) || typeof tablesResult === 'object')) {
@@ -321,6 +337,19 @@ Do not include any other text or explanation.`;
  * Use LLM to intelligently discover database schema
  */
 async function discoverSchemaIntelligently(dbTool) {
+  const mcpClient = getGlobalMcpClient();
+  
+  // Find the complete server config for this tool
+  // Since we know this server works (we found its tools), construct the config
+  const dbToolConfig = {
+    id: dbTool.serverId,
+    name: dbTool.serverName || dbTool.serverId,
+    url: "http://localhost:5009", // Known working endpoint for mauden_sql_server
+    mcp_endpoint: "/mcp", // Correct MCP endpoint
+    enabled: true,
+    timeout: 30000
+  };
+  
   const schemaDiscoveryPrompt = `You are an expert database administrator. You need to discover the schema of a database using the available tool: ${dbTool.name}.
 
 Tool description: ${dbTool.description || 'Database query tool'}
@@ -345,7 +374,7 @@ Respond with ONLY the SQL query, no explanations or additional text.`;
     
     // Try the LLM-generated query
     try {
-      const result = await dbTool.call({ query });
+      const result = await mcpClient.callTool(dbToolConfig, dbTool.name, { query });
       return { success: true, data: result, query: query };
     } catch (error) {
       console.log(`⚠️ LLM-generated query failed: ${error.message}`);
@@ -356,7 +385,7 @@ Respond with ONLY the SQL query, no explanations or additional text.`;
         const sqliteQuery = "SELECT name FROM sqlite_master WHERE type='table'";
         
         try {
-          const sqliteResult = await dbTool.call({ query: sqliteQuery });
+          const sqliteResult = await mcpClient.callTool(dbToolConfig, dbTool.name, { query: sqliteQuery });
           return { success: true, data: sqliteResult, query: sqliteQuery };
         } catch (sqliteError) {
           console.log(`⚠️ SQLite query also failed: ${sqliteError.message}`);
@@ -379,7 +408,7 @@ Respond with ONLY the SQL query, no explanations.`;
       console.log(`🔍 LLM generated fallback query: ${fallbackQuery}`);
       
       try {
-        const fallbackResult = await dbTool.call({ query: fallbackQuery });
+        const fallbackResult = await mcpClient.callTool(dbToolConfig, dbTool.name, { query: fallbackQuery });
         return { success: true, data: fallbackResult, query: fallbackQuery };
       } catch (fallbackError) {
         console.log(`⚠️ Fallback query also failed: ${fallbackError.message}`);

@@ -2,6 +2,29 @@ const axios = require('axios');
 const { McpFormatConverter } = require('./mcpFormatConverter');
 const { mcpConfigManager } = require('./mcpConfig');
 
+// Singleton MCP Client instance per riutilizzare le connessioni
+let globalMcpClient = null;
+
+function getGlobalMcpClient() {
+  if (!globalMcpClient) {
+    const MCPClient = require('./mcpClient');
+    globalMcpClient = new MCPClient();
+    console.log('🔄 Created new global MCP client instance');
+  }
+  return globalMcpClient;
+}
+
+// Funzione per resettare il client globale (utile per test o restart)
+function resetGlobalMcpClient() {
+  if (globalMcpClient) {
+    console.log('🔄 Resetting global MCP client - disconnecting all servers');
+    globalMcpClient.disconnectAll().catch(err => 
+      console.warn('⚠️ Error during client cleanup:', err.message)
+    );
+    globalMcpClient = null;
+  }
+}
+
 /**
  * Fetches available MCP tool definitions from configured servers
  */
@@ -17,6 +40,14 @@ async function getAllMcpTools() {
     console.error('❌ No configuration loaded');
     return [];
   }
+  
+  // Debug: log della configurazione
+  console.log('🔧 Config loaded:', { 
+    hasDiscovery: !!config.discovery, 
+    hasServers: !!config.servers, 
+    serversCount: config.servers?.length || 0,
+    discoveryEnabled: config.discovery?.enabled 
+  });
   
   if (!config.discovery) {
     console.warn('⚠️ No discovery configuration found, creating default');
@@ -44,9 +75,8 @@ async function getAllMcpTools() {
   console.log(`🔍 Starting discovery from ${enabledServers.length} MCP servers...`);
   console.log(`📋 Using ${config.servers.find(s => s.type === 'command') ? 'Standard MCP' : 'HTTP'} format servers`);
   
-  // Log dell'istanza MCP client che verrà utilizzata
-  const MCPClient = require('./mcpClient');
-  const mcpClient = new MCPClient();
+  // Usa il client MCP globale singleton
+  const mcpClient = getGlobalMcpClient();
   const clientStats = mcpClient.getConnectionStats();
   console.log(`📊 MCP Client Stats: ${JSON.stringify(clientStats)}`);
   
@@ -224,9 +254,8 @@ async function discoverFromMcpCommandServer(serverConfig) {
   console.log(`🔍 ${serverConfig.name}: Discovering tools via MCP standard protocol`);
   
   try {
-    // Usa il client MCP per ottenere i tool via JSON-RPC
-    const MCPClient = require('./mcpClient');
-    const mcpClient = new MCPClient();
+    // Usa il client MCP globale per ottenere i tool via JSON-RPC
+    const mcpClient = getGlobalMcpClient();
     
     // Verifica se esiste già una connessione sana
     if (mcpClient.isConnected(serverId)) {
@@ -499,4 +528,4 @@ class Semaphore {
   }
 }
 
-module.exports = { getAllMcpTools };
+module.exports = { getAllMcpTools, resetGlobalMcpClient, getGlobalMcpClient };

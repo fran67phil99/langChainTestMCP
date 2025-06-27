@@ -106,6 +106,7 @@ class MCPClient {
       serverId,
       ready: false,
       timeout: serverConfig.timeout || 10000,
+      mcp_endpoint: serverConfig.mcp_endpoint || '/mcp', // Use /mcp as default instead of /jsonrpc
       createdAt: Date.now() // Track when the connection was created
     };
 
@@ -243,7 +244,13 @@ class MCPClient {
   // Invia una richiesta JSON-RPC via HTTP
   async sendHttpRequest(connection, request, timeout = 10000) {
     try {
-      const response = await fetch(`${connection.url}/jsonrpc`, {
+      // Use the mcp_endpoint if specified, otherwise default to /mcp
+      const endpoint = connection.mcp_endpoint || '/mcp';
+      const url = `${connection.url}${endpoint}`;
+      
+      console.log(`🔍 MCP HTTP Request to ${url}:`, JSON.stringify(request, null, 2));
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -252,13 +259,19 @@ class MCPClient {
         timeout: timeout
       });
 
+      console.log(`📡 MCP HTTP Response status: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`❌ MCP HTTP Error response: ${errorText}`);
         throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
       }
 
       const jsonResponse = await response.json();
+      console.log(`✅ MCP HTTP Response:`, JSON.stringify(jsonResponse, null, 2));
       return jsonResponse;
     } catch (error) {
+      console.log(`💥 MCP HTTP Request failed:`, error);
       throw new Error(`HTTP request failed: ${error.message}`);
     }
   }
@@ -341,7 +354,8 @@ class MCPClient {
   sendNotification(connection, notification) {
     if (connection.type === 'http') {
       // Per HTTP, invia la notifica come richiesta POST senza aspettare risposta
-      fetch(`${connection.url}/jsonrpc`, {
+      const endpoint = connection.mcp_endpoint || '/mcp';
+      fetch(`${connection.url}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

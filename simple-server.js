@@ -135,7 +135,7 @@ app.post('/api/chat', async (req, res) => {
     const result = await runOrchestration(message, threadId, existingMessages);
     
     // Add AI response to conversation history
-    const aiResponse = result.finalAnswer || result.finalResponse || result.messages?.[result.messages.length - 1]?.content || 'Nessuna risposta disponibile';
+    const aiResponse = result.finalAnswer || result.finalResponse || result.response || result.messages?.[result.messages.length - 1]?.content || 'Nessuna risposta disponibile';
     addToConversationHistory(threadId, 'ai', aiResponse);
     
     res.json({

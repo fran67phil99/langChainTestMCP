@@ -46,7 +46,8 @@ async function executePlan(plan, initialUserInput, chat_history, threadId, avail
 
         // Store the result with step number as key
         const stepKey = `step_${step.step}`;
-        const resultData = stepResult.response || stepResult;
+        // Try different response field names depending on the agent type
+        const resultData = stepResult.finalResponse || stepResult.formattedResponse || stepResult.response || stepResult;
         executionContext[stepKey] = resultData;
         console.log(`✅ Step ${step.step} result stored in '${stepKey}'.`);
     }

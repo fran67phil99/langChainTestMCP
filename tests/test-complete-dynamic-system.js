@@ -4,7 +4,7 @@ const http = require('http');
 const path = require('path');
 
 // Import del nostro orchestrator ottimizzato
-const { runOrchestratorOptimized } = require('../src/agents/orchestratorAgent.optimized');
+const { runOrchestration } = require('../src/agents/orchestratorAgent.optimized');
 
 async function testCompleteSystem() {
   console.log('🧪 Testing complete system with dynamic routing...\n');
@@ -19,7 +19,7 @@ async function testCompleteSystem() {
     console.log('🚀 Starting orchestrator with completely dynamic routing...');
     
     // Pass the query string directly as the orchestrator expects
-    const result = await runOrchestratorOptimized(testQuery, threadId);
+    const result = await runOrchestration(testQuery, threadId);
     
     console.log('\n📊 RESULTS:');
     console.log('=' * 50);
@@ -78,7 +78,7 @@ async function testItalianQuery() {
     try {
     const threadId = 'test-italian-' + Date.now();
     
-    const result = await runOrchestratorOptimized(italianQuery, threadId);
+    const result = await runOrchestration(italianQuery, threadId);
     
     console.log('\n📊 ITALIAN QUERY RESULTS:');
     console.log('=' * 50);

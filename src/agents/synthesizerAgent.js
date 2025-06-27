@@ -20,71 +20,45 @@ async function runSynthesizerAgent(originalQuery, executionContext, plan) {
         temperature: 0.1, // Low temperature for factual, consistent synthesis
     });
 
+    // Generate dynamic prompt based on the type of query and available data
+    const dataTypes = Object.keys(executionContext);
+    const hasComplexData = dataTypes.some(key => 
+        typeof executionContext[key] === 'object' && executionContext[key] !== null
+    );
+    
     const prompt = `
-        You are a "Synthesizer" agent. Your job is to provide a final, comprehensive, and natural language answer to the user's original question based on the results gathered by a team of agents.
+        You are an expert AI assistant providing a comprehensive answer to the user's question based on collected data and analysis.
 
         **User's Original Question:**
         "${originalQuery}"
 
-        **Execution Context (Data Gathered):**
-        Here is the data collected by other agents in a step-by-step execution. Each key is a variable name from the plan, and its value is the data found.
-        \`\`\`json
+        **Available Data:**
         ${JSON.stringify(executionContext, null, 2)}
-        \`\`\`
 
-        **Executed Plan:**
-        This was the plan to answer the user's question:
-        \`\`\`json
-        ${JSON.stringify(plan, null, 2)}
-        \`\`\`
+        **RESPONSE GUIDELINES:**
+        1. **Be Natural and Conversational**: Write as if you're having a natural conversation with the user
+        2. **Adapt to Content**: Let the nature of the data and question determine your response structure
+        3. **Use Clear Organization**: When appropriate, use headings (##) and bullet points for readability
+        4. **Focus on Value**: Highlight the most important and relevant information first
+        5. **Be Comprehensive but Concise**: Cover all important aspects without being verbose
+        6. **Use the Same Language**: Respond in the same language as the user's question
 
-        **CRITICAL FORMATTING REQUIREMENTS:**
-        You MUST follow this exact structure for your response:
+        **FORMATTING PRINCIPLES:**
+        - Start with a direct answer or key insight
+        - Use **bold** for important information (numbers, dates, key terms)
+        - Add relevant emojis sparingly for visual appeal (📊, ✅, �, etc.)
+        - Create logical sections only when they add clarity
+        - Include specific details and examples when available
+        - End with a practical summary or next steps if relevant
 
-        1. **Brief Overview/Introduction** - Start with a clear, emoji-enhanced summary paragraph
-        2. **Main Content Sections** - Use clear ## headings to organize information
-        3. **Data Presentation** - Use bullet points, numbered lists, and tables for structured data
-        4. **Key Statistics/Highlights** - Emphasize important numbers and insights
-        5. **Summary/Conclusion** - End with actionable insights or next steps
+        **IMPORTANT RULES:**
+        - DO NOT mention "execution context", "plan", "steps", or "variables" 
+        - DO NOT follow a rigid template - adapt to the content naturally
+        - DO NOT force sections if the response flows better as paragraphs
+        - Make the user feel like they're talking to one intelligent assistant
+        - Be helpful, accurate, and engaging
 
-        **SPECIFIC FORMATTING RULES:**
-        - Always use descriptive headings like "## Universal Titles Overview" or "## Latest Issues and Sales Dates"
-        - Present lists as clean bullet points with consistent formatting
-        - Use **bold** for important numbers, dates, and key information
-        - Include relevant emojis (📊, ✅, 📋, etc.) but don't overuse them
-        - Group related information logically under clear sections
-        - Use "Issue X for..." format for version/issue information
-        - Always include total counts and summary statistics
-        - End with a professional summary paragraph
-
-        **Example Structure:**
-        📊 **[Topic] Overview**
-        A total of X [items] are currently [status], showcasing [key characteristics]. The [items] include:
-        
-        • Item 1 - Description
-        • Item 2 - Description
-        [etc.]
-
-        ## [Section Title]
-        The [data type] for these [items] vary, with the most recent being [specific detail]. Other notable [details] include:
-        
-        • **Issue X** for [Item] (Latest [Data]: [Date])
-        • **Issue Y** for [Item] (Latest [Data]: [Date])
-        [etc.]
-
-        ## Summary of [Key Metric]
-        The [summary information] with [key insights]. In summary, [conclusion with business value].
-
-        **Your Task:**
-        1. Carefully analyze the user's original question
-        2. Review the data in the "Execution Context" 
-        3. Understand how the "Executed Plan" led to the collected data
-        4. Synthesize a comprehensive answer following the EXACT formatting structure above
-        5. **DO NOT** mention the plan, steps, or variable names - the user should feel like they're talking to a single intelligent assistant
-        6. Use the same language as the original question
-        7. Ensure the response is scannable with clear visual hierarchy
-
-        **Final Answer:**
+        Please provide a natural, well-structured response that directly answers the user's question:
     `;
 
     try {
