@@ -100,8 +100,8 @@ async function translateToUserLanguage(englishResponse, targetLanguage, targetLa
   
   // Check for problematic values that shouldn't be translated literally
   const problematicValues = ['undefined', 'null', 'NaN', '[object Object]'];
-  if (problematicValues.some(val => englishResponse.trim().toLowerCase().includes(val.toLowerCase()))) {
-    console.log(`⚠️ English response contains problematic values, providing fallback`);
+  if (problematicValues.some(val => englishResponse.trim().toLowerCase() === val.toLowerCase())) {
+    console.log(`⚠️ English response is a problematic value, providing fallback`);
     return targetLanguage === 'it' 
       ? "Mi dispiace, si è verificato un errore nel processamento della risposta."
       : "I apologize, there was an error processing the response.";
@@ -115,21 +115,23 @@ async function translateToUserLanguage(englishResponse, targetLanguage, targetLa
   
   try {
     const translationMessages = [
-      new HumanMessage(`You are a professional translator. Translate this English response to ${targetLanguageName} while maintaining:
+      new HumanMessage(`You are a professional translator. Translate this English response to ${targetLanguageName}.
 
 ENGLISH RESPONSE TO TRANSLATE:
-"${englishResponse}"
+---
+${englishResponse}
+---
 
 TARGET LANGUAGE: ${targetLanguageName} (${targetLanguage})
 
 TRANSLATION GUIDELINES:
-- Maintain the exact same meaning, tone, and professional style
-- Keep emoji, Markdown formatting, and structure intact
-- Preserve technical terms appropriately
-- Maintain any statistical data or numbers exactly
-- Keep company names (like "Mauden") unchanged
-- Ensure cultural appropriateness for the target language
-- Do not add explanations - only provide the direct translation
+1.  **Preserve Formatting**: Maintain the exact same structure, including Markdown (like lists, bold, italics), code blocks, and line breaks.
+2.  **Accurate Meaning**: Translate the meaning, tone, and professional style accurately.
+3.  **Technical Terms**: Preserve technical terms, acronyms, and proper nouns (like "Mauden", "SQL", "MCP").
+4.  **Data Integrity**: Keep all numbers, statistics, and data unchanged.
+5.  **No Additions**: Do not add any extra explanations, apologies, or comments. Provide only the direct translation.
+
+First, think step-by-step on how to preserve the formatting. Then, provide the final translated response.
 
 TRANSLATED RESPONSE:`)
     ];
@@ -137,43 +139,10 @@ TRANSLATED RESPONSE:`)
     const response = await llm.invoke(translationMessages);
     let translatedResponse = response.content.trim();
     
-    // Post-translation validation
-    if (!translatedResponse || translatedResponse.length === 0) {
-      console.log(`⚠️ Empty translation received, using fallback`);
-      return englishResponse; // Return original if translation is empty
-    }
-    
-    // Check if translation contains problematic patterns
-    const problematicPatterns = [
-      'non definito',
-      'undefined',
-      'null',
-      'NaN',
-      '[object object]',
-      'errore di traduzione'
-    ];
-    
-    if (problematicPatterns.some(pattern => translatedResponse.toLowerCase().includes(pattern))) {
-      console.log(`⚠️ Translation contains problematic content: "${translatedResponse}"`);
-      console.log(`🔄 Using fallback response in ${targetLanguageName}`);
-      
-      // Provide appropriate fallback based on target language
-      switch (targetLanguage) {
-        case 'it':
-          translatedResponse = "Mi dispiace, non sono riuscito a fornire una risposta completa. Ti prego di riprovare.";
-          break;
-        case 'fr':
-          translatedResponse = "Je suis désolé, je n'ai pas pu fournir une réponse complète. Veuillez réessayer.";
-          break;
-        case 'es':
-          translatedResponse = "Lo siento, no pude proporcionar una respuesta completa. Por favor, inténtalo de nuevo.";
-          break;
-        case 'de':
-          translatedResponse = "Es tut mir leid, ich konnte keine vollständige Antwort geben. Bitte versuchen Sie es erneut.";
-          break;
-        default:
-          return englishResponse; // Fallback to English for unknown languages
-      }
+    // Post-translation validation: check for empty or very short response
+    if (!translatedResponse || translatedResponse.length < englishResponse.length / 4) {
+      console.log(`⚠️ Translation seems empty or too short. Using original response as fallback.`);
+      return englishResponse; // Return original if translation is suspicious
     }
     
     console.log(`✅ Response successfully translated to ${targetLanguageName}`);
@@ -181,21 +150,9 @@ TRANSLATED RESPONSE:`)
     
   } catch (error) {
     console.error(`❌ Translation Error:`, error);
-    console.log(`🔄 Fallback: Providing localized error message for translation failure`);
-    
-    // Provide appropriate error message based on target language instead of returning English
-    switch (targetLanguage) {
-      case 'it':
-        return "Mi dispiace, si è verificato un problema con la traduzione. Tuttavia, posso confermare che la tua richiesta è stata elaborata correttamente.";
-      case 'fr':
-        return "Je suis désolé, il y a eu un problème avec la traduction. Cependant, je peux confirmer que votre demande a été traitée correctement.";
-      case 'es':
-        return "Lo siento, hubo un problema con la traducción. Sin embargo, puedo confirmar que su solicitud fue procesada correctamente.";
-      case 'de':
-        return "Es tut mir leid, es gab ein Problem mit der Übersetzung. Ich kann jedoch bestätigen, dass Ihre Anfrage korrekt verarbeitet wurde.";
-      default:
-        return englishResponse; // Fallback to English only for unsupported languages
-    }
+    console.log(`🔄 Fallback: Providing original English response due to translation failure.`);
+    // Return the original English response as a safe fallback
+    return englishResponse;
   }
 }
 

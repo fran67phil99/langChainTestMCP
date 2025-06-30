@@ -74,7 +74,7 @@ Your response should be complete and direct, without references to "tools" or un
  * @returns {Promise<Object>} - General agent result with context awareness
  */
 async function runGeneralAgentWithContext(messages, threadId, context = {}) {
-  console.log(`💬 General Agent: Processing query with conversation context`);
+  console.log(`💬 General Agent: Processing query with conversation context and A2A data`);
   
   try {
     const userMessage = messages[messages.length - 1].content;
@@ -84,26 +84,63 @@ async function runGeneralAgentWithContext(messages, threadId, context = {}) {
       ? `\n\nConversation Context:\n${conversationHistory.map(msg => `${msg.constructor.name}: ${msg.content}`).join('\n')}`
       : '';
     
+    // Extract A2A context data if available
+    let a2aDataString = '';
+    if (context && Object.keys(context).length > 0) {
+      console.log(`📊 General Agent: Using A2A context with ${Object.keys(context).length} data sources`);
+      a2aDataString = '\n\nREAL DATA FROM PREVIOUS AGENTS:\n';
+      for (const [key, value] of Object.entries(context)) {
+        if (value && value.mcpData) {
+          // Extract actual data from MCP results
+          a2aDataString += `\n${key.toUpperCase()}:\n`;
+          
+          // Handle mcpData safely - check if it's an array
+          const mcpDataArray = Array.isArray(value.mcpData) ? value.mcpData : [value.mcpData];
+          
+          for (const mcpResult of mcpDataArray) {
+            if (mcpResult && mcpResult.success && mcpResult.data) {
+              try {
+                const parsedData = typeof mcpResult.data === 'string' ? JSON.parse(mcpResult.data) : mcpResult.data;
+                a2aDataString += `- ${mcpResult.toolName || 'unknown_tool'}: ${JSON.stringify(parsedData, null, 2)}\n`;
+              } catch (e) {
+                a2aDataString += `- ${mcpResult.toolName || 'unknown_tool'}: ${mcpResult.data}\n`;
+              }
+            } else if (mcpResult) {
+              // Handle non-standard mcpResult format
+              a2aDataString += `- Data: ${JSON.stringify(mcpResult, null, 2)}\n`;
+            }
+          }
+        } else {
+          a2aDataString += `${key}: ${JSON.stringify(value, null, 2)}\n`;
+        }
+      }
+    }
+    
     const llmMessages = [
-      new HumanMessage(`You are an intelligent and professional general AI assistant with conversation awareness.
+      new HumanMessage(`You are an intelligent and professional AI assistant for Mauden company with access to REAL company data.
 
 Current Question: "${userMessage}"
 ${contextString}
+${a2aDataString}
 
-Provide a comprehensive response that:
-- Addresses the current question directly
-- Takes into account any conversation context if relevant
-- Maintains professional but friendly tone
-- Uses appropriate emojis and Markdown formatting
-- Provides practical and actionable information
-- Explains limitations when appropriate
-- Suggests related topics or questions when helpful
+IMPORTANT INSTRUCTIONS:
+${a2aDataString ? `- You have REAL DATA from Mauden company systems above. Use this specific data to answer the question.
+- Provide detailed information based on the actual employee and intern data shown.
+- List specific names, roles, ages, salaries, and other details from the real data.
+- Organize the information clearly with proper formatting.
+- Calculate statistics and insights from the actual data provided.
+- DO NOT provide generic or hypothetical responses when you have real data.` : `- This appears to be a general knowledge question. Provide a comprehensive general response.`}
 
-Guidelines:
-- Be thorough but concise
+Formatting Guidelines:
+- Use appropriate emojis and Markdown formatting for better readability
+- Provide clear section headers when organizing data
+- Include statistics and insights when relevant
+- Maintain a professional but accessible tone
+- Be thorough and informative
 - Respond in English (translation handled separately)
-- Don't reference internal systems or tools
-- Focus on providing value to the user`)
+- Don't reference internal systems or mention "tools" or "agents"
+
+${a2aDataString ? 'Focus on providing a complete answer using ALL the real Mauden data available.' : 'Provide helpful general information on this topic.'}`)
     ];
 
     const llmResponse = await llm.invoke(llmMessages);
@@ -113,7 +150,8 @@ Guidelines:
       success: true,
       llmElaborated: true,
       agent: 'general',
-      contextAware: true
+      contextAware: true,
+      usedA2AData: a2aDataString.length > 0
     };
     
   } catch (error) {

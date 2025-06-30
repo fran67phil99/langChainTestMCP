@@ -374,7 +374,7 @@ async function discoverFromMcpHttpServer(serverConfig, mcpUrl, timeout, retryAtt
 function createToolFromSchema(schema, serverConfig) {
   return {
     name: schema.name,
-    description: `[${serverConfig.name}] ${schema.description}`,
+    description: schema.description || 'Tool description not provided by server',
     serverId: serverConfig.id,
     serverName: serverConfig.name,
     call: async function(input) {
@@ -435,7 +435,7 @@ function createToolFromSchema(schema, serverConfig) {
 function createToolFromMcpSchema(mcpTool, serverConfig) {
   return {
     name: mcpTool.name,
-    description: `[${serverConfig.name}] ${mcpTool.description}`,
+    description: mcpTool.description || 'Tool description not provided by server',
     serverId: serverConfig.id,
     serverName: serverConfig.name,
     mcpTool: true, // Flag per identificare tool MCP

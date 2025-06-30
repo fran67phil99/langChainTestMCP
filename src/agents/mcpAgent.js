@@ -13,26 +13,54 @@ const llm = createTrackedLLM({
 /**
  * Main MCP Agent function - handles company data queries through MCP tools
  * @param {Array} messages - Message history
- * @param {Object} selectedTool - The MCP tool to use
+ * @param {Object|Array} selectedTool - The MCP tool(s) to use - can be single tool or array of tools
  * @param {string} userQuery - User's query in English
  * @param {string} threadId - Thread identifier
  * @param {Array} availableTools - All available tools for A2A communication
  * @returns {Promise<Object>} - MCP agent result with processed data
  */
 async function runMcpAgent(messages, selectedTool, userQuery, threadId, availableTools = []) {
-  console.log(`🔧 MCP Agent: Processing query with tool: ${selectedTool?.name}`);
+  // Support both single tool and array of tools
+  const toolsToExecute = Array.isArray(selectedTool) ? selectedTool : [selectedTool];
+  const toolNames = toolsToExecute.map(t => t?.name).join(', ');
+  
+  console.log(`🔧 MCP Agent: Processing query with ${toolsToExecute.length} tool(s): ${toolNames}`);
   
   // Log MCP agent start
   logAgentActivity('mcp_agent', 'processing_start', {
-    toolName: selectedTool?.name,
+    toolNames: toolNames,
+    toolCount: toolsToExecute.length,
     userQuery,
     threadId
   });
   
+  // Check if this is a direct tool call (bypassing agent logic)
+  const isDirectToolCall = typeof userQuery === 'object' && userQuery !== null;
+
   try {
-    if (!selectedTool) {
-      throw new Error('No suitable MCP tool found');
-    }    // Check if this is a schema/table discovery query that should use A2A
+    if (isDirectToolCall) {
+        const toolToExecute = toolsToExecute[0];
+        if (!toolToExecute) throw new Error('No tool provided for direct execution.');
+
+        console.log(`🔧 MCP Agent (Direct Call): Executing tool: ${toolToExecute.name} with params:`, userQuery);
+        const mcpData = await toolToExecute.call(userQuery);
+        console.log(`✅ MCP Agent (Direct Call): Tool executed successfully`);
+
+        return {
+            response: mcpData,
+            finalResponse: JSON.stringify(mcpData),
+            success: true,
+        };
+    }    // If multiple tools needed, execute them all and aggregate results
+    if (toolsToExecute.length > 1) {
+      console.log(`🔄 MCP Agent: Executing ${toolsToExecute.length} tools in sequence...`);
+      return await executeMultipleTools(toolsToExecute, userQuery, messages, threadId);
+    }
+    
+    // Single tool execution (existing logic)
+    const selectedTool = toolsToExecute[0];
+    
+    // Check if this is a schema/table discovery query that should use A2A
     const isSchemaQuery = await isSchemaDiscoveryQuery(userQuery);
     const isDataQuery = await isDataSearchQuery(userQuery);
     
@@ -158,13 +186,155 @@ Guidelines:
 }
 
 /**
- * Intelligent MCP tool selection using LLM
+ * Execute multiple MCP tools in sequence and aggregate results
+ * @param {Array} tools - Array of MCP tools to execute
+ * @param {string} userQuery - User's query in English
+ * @param {Array} messages - Message history
+ * @param {string} threadId - Thread identifier
+ * @returns {Promise<Object>} - Aggregated results from all tools
+ */
+async function executeMultipleTools(tools, userQuery, messages, threadId) {
+  console.log(`🔄 MCP Agent Multi-Tool: Executing ${tools.length} tools sequentially...`);
+  
+  const allResults = [];
+  const successfulTools = [];
+  const failedTools = [];
+  
+  // Execute each tool
+  for (const tool of tools) {
+    try {
+      console.log(`🔧 Executing tool: ${tool.name}`);
+      const toolResult = await tool.call({});
+      
+      allResults.push({
+        toolName: tool.name,
+        toolDescription: tool.description,
+        data: toolResult,
+        success: true
+      });
+      
+      successfulTools.push(tool.name);
+      
+      // Log successful tool execution
+      logAgentActivity('mcp_agent', 'multi_tool_executed', {
+        toolName: tool.name,
+        toolIndex: successfulTools.length,
+        totalTools: tools.length
+      });
+      
+    } catch (error) {
+      console.error(`❌ Tool ${tool.name} failed:`, error.message);
+      failedTools.push({ name: tool.name, error: error.message });
+      
+      allResults.push({
+        toolName: tool.name,
+        toolDescription: tool.description,
+        data: null,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+  
+  console.log(`✅ MCP Agent Multi-Tool: Completed ${successfulTools.length}/${tools.length} tools successfully`);
+  
+  // If no tools succeeded, return error
+  if (successfulTools.length === 0) {
+    return {
+      error: `All ${tools.length} tools failed to execute`,
+      finalResponse: `I'm sorry, I couldn't retrieve the requested data from any of the ${tools.length} relevant data sources.`,
+      success: false,
+      agent: 'mcp',
+      toolsAttempted: tools.map(t => t.name),
+      failedTools
+    };
+  }
+  
+  // Aggregate and format results using LLM
+  const aggregatedResponse = await formatMultiToolResponse(userQuery, allResults, messages, successfulTools, failedTools);
+  
+  return {
+    mcpData: allResults,
+    finalResponse: aggregatedResponse,
+    toolsUsed: successfulTools,
+    success: true,
+    llmElaborated: true,
+    agent: 'mcp',
+    method: 'multi_tool_execution',
+    toolCount: successfulTools.length,
+    failedTools: failedTools.length > 0 ? failedTools : undefined
+  };
+}
+
+/**
+ * Format aggregated results from multiple tools using LLM
+ * @param {string} userQuery - Original user query
+ * @param {Array} allResults - Results from all tools (successful and failed)
+ * @param {Array} messages - Message history
+ * @param {Array} successfulTools - Names of successful tools
+ * @param {Array} failedTools - Failed tools with error info
+ * @returns {Promise<string>} - Formatted aggregated response
+ */
+async function formatMultiToolResponse(userQuery, allResults, messages, successfulTools, failedTools) {
+  // Filter and convert conversation history to valid LangChain messages
+  const validMessages = messages.slice(0, -1).filter(msg => 
+    msg && (msg.constructor.name === 'HumanMessage' || msg.constructor.name === 'AIMessage')
+  );
+  
+  // Prepare data summary for LLM
+  const successfulResults = allResults.filter(r => r.success);
+  const datasetSummary = successfulResults.map(r => ({
+    source: r.toolName,
+    description: r.toolDescription,
+    dataType: Array.isArray(r.data) ? `Array with ${r.data.length} items` : typeof r.data,
+    sampleData: Array.isArray(r.data) && r.data.length > 0 ? r.data.slice(0, 3) : r.data
+  }));
+  
+  const llmMessages = [
+    ...validMessages,
+    new HumanMessage(`You are a professional business assistant for Mauden. The user asked: "${userQuery}"
+
+I gathered data from ${successfulTools.length} different data sources to provide a comprehensive answer:
+
+SUCCESSFUL DATA SOURCES (${successfulTools.length}):
+${successfulResults.map((result, index) => `
+${index + 1}. SOURCE: ${result.toolName}
+   DESCRIPTION: ${result.toolDescription}
+   DATA: ${JSON.stringify(result.data, null, 2)}
+`).join('\n')}
+
+${failedTools.length > 0 ? `\nFAILED DATA SOURCES (${failedTools.length}):
+${failedTools.map(f => `- ${f.name}: ${f.error}`).join('\n')}` : ''}
+
+${validMessages.length > 0 ? '\nIMPORTANT: Consider the conversation history above. If the user is asking about someone mentioned earlier, focus specifically on that person in your response and provide their details from ALL the available data sources.' : ''}
+
+INSTRUCTIONS:
+- Provide a comprehensive response that COMBINES and ANALYZES data from ALL successful sources
+- Use appropriate emojis and Markdown formatting for better readability
+- If you have employee data from multiple sources, merge and compare the information
+- Provide statistics, insights, and patterns when relevant
+- Highlight what data came from which source when relevant
+- Maintain a professional but accessible tone
+- If some sources failed, mention what data might be missing but focus on what you DO have
+- Include suggestions for related questions when appropriate
+- Be thorough but well-organized
+- ${validMessages.length > 0 ? 'When referencing conversation context, be specific about which person or topic was discussed earlier and search across ALL data sources' : ''}
+
+Your goal is to provide the most complete and useful answer possible by leveraging ALL the available data sources.`)
+  ];
+
+  const llmResponse = await llm.invoke(llmMessages);
+  return llmResponse.content;
+}
+
+/**
+ * Smart MCP tool selection - can return single tool or multiple tools based on query analysis
  * @param {string} userInput - User's query in English
  * @param {Array} mcpTools - Available MCP tools
- * @returns {Promise<Object>} - Selected MCP tool
+ * @returns {Promise<Object|Array>} - Selected MCP tool(s)
  */
 async function selectMcpTool(userInput, mcpTools) {
-  console.log(`🤖 MCP Agent Tool Selector: Selecting best tool for query...`);
+  console.log(`🤖 MCP Agent Tool Selector: Analyzing query for optimal tool selection...`);
   
   // Se non ci sono tool disponibili, non possiamo procedere
   if (!mcpTools || mcpTools.length === 0) {
@@ -173,38 +343,55 @@ async function selectMcpTool(userInput, mcpTools) {
   }
   
   try {
-    // Let LLM decide which tool to use based on user query and tool descriptions
+    // First, let LLM decide if multiple tools are needed
     const toolDescriptions = mcpTools.map((tool, index) => 
       `${index + 1}. Tool: ${tool.name}\n   Description: ${tool.description}`
     ).join('\n\n');
     
-    const selectionMessages = [
-      new HumanMessage(`You are an intelligent MCP tool selector for Mauden company data. You must choose the most appropriate tool to answer the user's question.
+    const analysisMessages = [
+      new HumanMessage(`You are an intelligent MCP tool analyzer for Mauden company data. Analyze the user's query to determine if multiple tools are needed for a comprehensive answer.
 
 USER QUERY: "${userInput}"
 
 AVAILABLE TOOLS:
 ${toolDescriptions}
 
-INSTRUCTIONS:
-- Analyze the user's question and choose the most appropriate tool
-- Respond ONLY with the tool number (1, 2, 3, etc.)
-- If unsure, choose the tool that seems closest to the query topic
-- Consider: employees data, interns data, models data
+ANALYSIS INSTRUCTIONS:
+1. Determine if the query requires data from multiple sources to provide a complete answer
+2. Consider if the user is asking for comprehensive information that might span multiple datasets
+3. Examples of multi-tool queries:
+   - "Show me all employees and interns"
+   - "Get all company personnel data"
+   - "List everyone working at Mauden"
+   - "Show all staff including interns"
 
-RESPONSE (number only):`)
+RESPONSE FORMAT:
+If single tool is sufficient: Respond with just the tool number (e.g., "2")
+If multiple tools are needed: Respond with comma-separated tool numbers (e.g., "1,3,4")
+
+RESPONSE (numbers only, comma-separated if multiple):`)
     ];
 
-    const selectionResponse = await llm.invoke(selectionMessages);
-    const toolNumber = parseInt(selectionResponse.content.trim()) - 1;
+    const analysisResponse = await llm.invoke(analysisMessages);
+    const toolSelection = analysisResponse.content.trim();
     
-    if (toolNumber >= 0 && toolNumber < mcpTools.length) {
-      const selectedTool = mcpTools[toolNumber];
-      console.log(`🔧 MCP Agent: Selected ${selectedTool.name} based on intelligent analysis`);
-      return selectedTool;
-    } else {
+    // Parse the response
+    const toolNumbers = toolSelection.split(',').map(num => parseInt(num.trim()) - 1);
+    const validToolNumbers = toolNumbers.filter(num => num >= 0 && num < mcpTools.length);
+    
+    if (validToolNumbers.length === 0) {
       console.log(`🔧 MCP Agent: Invalid selection, using first available tool: ${mcpTools[0]?.name}`);
       return mcpTools[0];
+    }
+    
+    const selectedTools = validToolNumbers.map(num => mcpTools[num]);
+    
+    if (selectedTools.length === 1) {
+      console.log(`🔧 MCP Agent: Selected single tool: ${selectedTools[0].name}`);
+      return selectedTools[0];
+    } else {
+      console.log(`🔧 MCP Agent: Selected ${selectedTools.length} tools: ${selectedTools.map(t => t.name).join(', ')}`);
+      return selectedTools;
     }
     
   } catch (error) {

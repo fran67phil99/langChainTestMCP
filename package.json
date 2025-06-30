@@ -17,7 +17,7 @@
     "enable-mcp": "node server-manager.js enable-mcp",
     "disable-mcp": "node server-manager.js disable-mcp",
     "dev": "nodemon simple-server.js",
-    "test": "node system-tester.js",
+    "test": "jest",
     "test:extended": "node test-extended-mcp-client.js",
     "test:quick": "node tests/quick-test.js",
     "demo": "node demo-system.js",
@@ -38,6 +38,7 @@
     "@types/express": "^5.0.3",
     "@types/node": "^22.15.30",
     "@types/socket.io": "^3.0.2",
+    "jest": "^30.0.3",
     "nodemon": "^3.1.10",
     "sinon": "^21.0.0",
     "typescript": "^5.8.3"

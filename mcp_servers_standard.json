@@ -41,11 +41,11 @@
   "httpServers": [
     {
       "id": "mauden_server",
-      "name": "Mauden MCP Server",
+      "name": "Employee Data Server",
       "url": "http://localhost:8080",
       "tools_endpoint": "/tools",
-      "description": "Server HTTP per dati dipendenti e stagisti Mauden tramite API REST",
-      "enabled": false,
+      "description": "Server HTTP per dati dipendenti e stagisti tramite API REST",
+      "enabled": true,
       "timeout": 10000,
       "retry_attempts": 3,
       "priority": 1
@@ -62,10 +62,10 @@
     },
     {
       "id": "mauden_sql_server",
-      "name": "Mauden SQL MCP Server",
+      "name": "De Agostini Film Database",
       "url": "http://localhost:5009",
       "mcp_endpoint": "/mcp",
-      "description": "Server MCP di De Agostini, per l'interrogazione di dati in SQL su database di cataloghi di film venduti, noleggiati e da vendere.",
+      "description": "Server per l'interrogazione di dati SQL (SQLite) su database di cataloghi di film De Agostini venduti, noleggiati e da vendere.",
       "enabled": true,
       "timeout": 30000,
       "retry_attempts": 3,
